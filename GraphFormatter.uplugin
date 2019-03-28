@@ -1,0 +1,30 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "2.0",
+	"FriendlyName": "GraphFormatter",
+	"Description": "Auto arrange graph nodes.",
+	"Category": "Utility",
+	"CreatedBy": "howaajin",
+	"CreatedByURL": "",
+	"DocsURL": "https://drive.google.com/open?id=1f8IQ3vJTZJXTeZst8wC6lWDQqJ-e-5hUxiXs4A68kTk",
+	"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/content/297159d6d3f4425b9c095b18a811a401",
+	"SupportURL": "",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "GraphFormatter",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit",
+			"WhitelistPlatforms": [
+				"Win64",
+				"Win32",
+				"Mac",
+				"Linux"
+			]
+		}
+	]
+}
