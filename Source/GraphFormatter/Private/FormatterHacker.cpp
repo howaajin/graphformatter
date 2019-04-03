@@ -42,7 +42,11 @@ DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorImpl, SGraphEditor, TSharedPt
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorPanel, SGraphEditorImpl, TSharedPtr<SGraphPanel>, GraphPanel)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphPanelZoomLevels, SNodePanel, TUniquePtr<FZoomLevelsContainer>, ZoomLevels)
 #endif
-DECLARE_PRIVATE_FUNC_ACCESSOR(FAccessSGraphPanelPostChangedZoom, SNodePanel, PostChangedZoom, void)
+struct FAccessSGraphPanelPostChangedZoom
+{
+	using MemberType = FunctionWrapper<SNodePanel, void>::Signature;
+};
+template struct FPrivateRob<FAccessSGraphPanelPostChangedZoom, &SNodePanel::PostChangedZoom>;
 DECLARE_PRIVATE_CONST_FUNC_ACCESSOR(FAccessSGraphNodeCommentHandleSelection, SGraphNodeComment, HandleSelection, void, bool, bool)
 
 template <typename TType, int32 offset, typename TClass>

@@ -50,7 +50,7 @@ struct Name \
 }; \
 template struct FPrivateRob<Name, &TargetClass::TargetMember>;
 
-#define DECLARE_PRIVATE_FUNC_ACCESSOR( Name, TargetClass, TargetMember, ReturnType, ... )\
+#define DECLARE_PRIVATE_FUNC_ACCESSOR( Name, TargetClass, TargetMember, ReturnType, ... ) \
 struct Name \
 { \
 	using MemberType = FunctionWrapper<TargetClass, ReturnType, __VA_ARGS__>::Signature; \
