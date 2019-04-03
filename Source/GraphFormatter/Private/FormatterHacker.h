@@ -16,4 +16,6 @@ class FFormatterHacker
 public:
 	static void UpdateCommentNodes(SGraphEditor* GraphEditor, UEdGraph* Graph);
 	static FFormatterDelegates GetDelegates(UObject* Object, IAssetEditorInstance* Instance);
+	static void ComputeLayoutAtRatioOne(FFormatterDelegates GraphDelegates, TSet<UEdGraphNode*> Nodes);
+	static void RestoreZoomLevel(FFormatterDelegates GraphDelegates);
 };

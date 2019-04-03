@@ -24,19 +24,19 @@ public:
 	UFormatterSettings();
 
 	/** Positioning algorithm*/
-	UPROPERTY(config, EditAnywhere)
+	UPROPERTY(config, EditAnywhere, Category = "Options")
 	EGraphFormatterPositioningAlgorithm PositioningAlgorithm;
 
 	/** Border thickness */
-	UPROPERTY(config, EditAnywhere, Category = "Spacing", meta = (ClampMin = 45))
+	UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 45))
 	int32 CommentBorder;
 
 	/** Spacing between two layers */
-	UPROPERTY(config, EditAnywhere, Category = "Spacing", meta = (ClampMin = 0))
+	UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
 	int32 HorizontalSpacing;
 
 	/** Spacing between two nodes */
-	UPROPERTY(config, EditAnywhere, Category = "Spacing", meta = (ClampMin = 0))
+	UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
 	int32 VerticalSpacing;
 
 	/** Vertex ordering max iterations */

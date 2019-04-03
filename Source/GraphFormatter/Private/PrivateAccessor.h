@@ -15,13 +15,10 @@ template<typename TClass>
 typename TClass::MemberType FPrivateAccessor<TClass>::Member;
 
 template<typename TClass, typename TClass::MemberType m>
-struct FPrivateRob : FPrivateAccessor<TClass>
+struct FPrivateRob
 {
-	struct Setter
-	{
-		Setter() { FPrivateAccessor<TClass>::Member = m; }
-	};
-	static Setter Instance;
+	FPrivateRob() { FPrivateAccessor<TClass>::Member = m; }
+	static FPrivateRob Instance;
 };
 
 template<class TClass, class TType, typename... Args>
@@ -37,12 +34,12 @@ struct FunctionWrapper
 };
 
 template<typename TClass, typename TClass::MemberType m>
-typename FPrivateRob<TClass, m>::Setter FPrivateRob<TClass, m>::Instance;
+FPrivateRob<TClass, m> FPrivateRob<TClass, m>::Instance;
 
 #define DECLARE_PRIVATE_MEMBER_ACCESSOR( Name, TargetClass, TargetMemberType, TargetMember ) \
 struct Name \
 { \
-	typedef TargetMemberType TargetClass::*MemberType; \
+	using MemberType = TargetMemberType TargetClass::*; \
 }; \
 template struct FPrivateRob<Name, &TargetClass::TargetMember>;
 

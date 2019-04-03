@@ -12,7 +12,7 @@ namespace UnrealBuildTool.Rules
 		public GraphFormatter(ReadOnlyTargetRules Target) : base(Target)
 		{
 			PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-
+			PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Public"));
 			PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{

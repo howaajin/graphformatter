@@ -131,6 +131,10 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
 		FAssetEditorToolkit* assetEditorToolkit = StaticCast<FAssetEditorToolkit*>(Instance);
 		const FFormatterCommands& Commands = FFormatterCommands::Get();
 		TSharedRef<FUICommandList> ToolkitCommands = assetEditorToolkit->GetToolkitCommands();
+		if (ToolkitCommands->IsActionMapped(Commands.FormatGraph))
+		{
+			return;
+		}
 		ToolkitCommands->MapAction(Commands.FormatGraph,
 		                           FExecuteAction::CreateRaw(this, &FFormatterModule::FormatGraph, GraphDelegates),
 		                           FCanExecuteAction::CreateLambda([]()-> bool { return true; })
@@ -249,9 +253,10 @@ void FFormatterModule::FormatGraph(FFormatterDelegates GraphDelegates)
 	FFormatterHacker::UpdateCommentNodes(GraphEditor, Graph);
 	auto SelectedNodes = GetSelectedNodes(GraphEditor);
 	SelectedNodes = DoSelectionStrategy(Graph, SelectedNodes);
-
+	FFormatterHacker::ComputeLayoutAtRatioOne(GraphDelegates, SelectedNodes);
 	FFormatterGraph GraphData(Graph, SelectedNodes, GraphDelegates);
 	GraphData.Format();
+	FFormatterHacker::RestoreZoomLevel(GraphDelegates);
 	auto FormatData = GraphData.GetBoundMap();
 	const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
 	for (auto formatData : FormatData)
