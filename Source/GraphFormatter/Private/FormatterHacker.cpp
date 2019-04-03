@@ -22,7 +22,7 @@
 #include "Framework/Application/SlateApplication.h"
 
 /* 
-** Offsets for the purpose of debug, only test on Win64
+** Offsets for the purpose of debug, only tested on Win64
 ** On Windows, acquiring the pointer to private member of a class in debug build don't work as expect
 ** So I have to do this hack
 */

@@ -31,7 +31,6 @@ class FFormatterModule : public IGraphFormatterModule
 	void HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance);
 	void FillToolbar(FToolBarBuilder& ToolbarBuilder);
 	void FormatGraph(FFormatterDelegates GraphDelegates);
-	TMap<IAssetEditorInstance*, TSharedPtr<FExtender> > ExtenderMap;
 	FDelegateHandle GraphEditorDelegateHandle;
 	TArray<TSharedPtr<EGraphFormatterPositioningAlgorithm> > AlgorithmOptions;
 };
@@ -139,20 +138,14 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
 		                           FExecuteAction::CreateRaw(this, &FFormatterModule::FormatGraph, GraphDelegates),
 		                           FCanExecuteAction::CreateLambda([]()-> bool { return true; })
 		);
-		TSharedPtr<FExtender>* pExtender = ExtenderMap.Find(Instance);
-		if (!pExtender)
-		{
-			TSharedPtr<FExtender> Extender = FAssetEditorToolkit::GetSharedToolBarExtensibilityManager()->GetAllExtenders();
-			assetEditorToolkit->AddToolbarExtender(Extender);
-			ExtenderMap.Add(Instance, Extender);
-			Extender->AddToolBarExtension
-			(
-				"Asset",
-				EExtensionHook::After,
-				ToolkitCommands,
-				FToolBarExtensionDelegate::CreateRaw(this, &FFormatterModule::FillToolbar)
-			);
-		}
+		TSharedPtr<FExtender> Extender = FAssetEditorToolkit::GetSharedToolBarExtensibilityManager()->GetAllExtenders();
+		assetEditorToolkit->AddToolbarExtender(Extender);
+		Extender->AddToolBarExtension(
+			"Asset",
+			EExtensionHook::After,
+			ToolkitCommands,
+			FToolBarExtensionDelegate::CreateRaw(this, &FFormatterModule::FillToolbar)
+		);
 	}
 }
 
