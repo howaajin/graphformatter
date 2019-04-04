@@ -17,8 +17,5 @@ public:
 	{
 	}
 	TSharedPtr<FUICommandInfo> FormatGraph;
-	TSharedPtr<FUICommandInfo> SelectConnectedNodes;
-	TSharedPtr<FUICommandInfo> SelectSuccessorNodes;
-	TSharedPtr<FUICommandInfo> SelectPredecessorNodes;
 	void RegisterCommands() override;
 };
