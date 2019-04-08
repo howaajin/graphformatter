@@ -12,9 +12,9 @@
 #include "EvenlyPlaceStrategy.h"
 #include "PriorityPositioningStrategy.h"
 
-bool FFormatterIndexedEdge::IsCrossing(const FFormatterIndexedEdge& Edge) const
+bool FFormatterEdge::IsCrossing(const FFormatterEdge* Edge) const
 {
-	return LayerIndex1 < Edge.LayerIndex1 && LayerIndex2 > Edge.LayerIndex2 || LayerIndex1 > Edge.LayerIndex1 && LayerIndex2 < Edge.LayerIndex2;
+	return FromIndex < Edge->FromIndex && ToIndex > Edge->ToIndex || FromIndex > Edge->FromIndex && ToIndex < Edge->ToIndex;
 }
 
 FFormatterNode::FFormatterNode(UEdGraphNode* InNode)
@@ -109,7 +109,7 @@ FFormatterNode::FFormatterNode()
 
 void FFormatterNode::Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin)
 {
-	const auto Edge = new FormatterEdge;
+	const auto Edge = new FFormatterEdge;
 	Edge->From = SourcePin;
 	Edge->To = TargetPin;
 	if (SourcePin->Direction == EGPD_Output)
@@ -124,7 +124,7 @@ void FFormatterNode::Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin)
 
 void FFormatterNode::Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetPin)
 {
-	const auto Predicate = [SourcePin, TargetPin](const FormatterEdge* Edge)
+	const auto Predicate = [SourcePin, TargetPin](const FFormatterEdge* Edge)
 	{
 		return Edge->From == SourcePin && Edge->To == TargetPin;
 	};
@@ -208,10 +208,10 @@ int32 FFormatterNode::GetOutputPinIndex(FFormatterPin* OutputPin) const
 	return OutPins.Find(OutputPin);
 }
 
-TArray<FFormatterIndexedEdge> FFormatterNode::GetIndexedEdge(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const
+TArray<FFormatterEdge*> FFormatterNode::GetEdgeLinkedToLayer(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const
 {
-	TArray<FFormatterIndexedEdge> Result;
-	const TArray<FormatterEdge*>& Edges = Direction == EGPD_Output ? OutEdges : InEdges;
+	TArray<FFormatterEdge*> Result;
+	const TArray<FFormatterEdge*>& Edges = Direction == EGPD_Output ? OutEdges : InEdges;
 	for (auto Edge : Edges)
 	{
 		int32 Index = 0;
@@ -224,12 +224,9 @@ TArray<FFormatterIndexedEdge> FFormatterNode::GetIndexedEdge(const TArray<FForma
 			else
 			{
 				Index += Direction == EGPD_Output ? NextLayerNode->GetInputPinIndex(Edge->To) : NextLayerNode->GetOutputPinIndex(Edge->To);
-				FFormatterIndexedEdge IndexedEdge
-				{
-					StartIndex + (Direction == EGPD_Output ? GetOutputPinIndex(Edge->From) : GetInputPinIndex(Edge->From)),
-					Index
-				};
-				Result.Add(IndexedEdge);
+				Edge->FromIndex = StartIndex + (Direction == EGPD_Output ? GetOutputPinIndex(Edge->From) : GetInputPinIndex(Edge->From));
+				Edge->ToIndex = Index;
+				Result.Add(Edge);
 			}
 		}
 	}
@@ -238,7 +235,7 @@ TArray<FFormatterIndexedEdge> FFormatterNode::GetIndexedEdge(const TArray<FForma
 
 float FFormatterNode::CalcBarycenter(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const
 {
-	auto Edges = GetIndexedEdge(Layer, StartIndex, Direction);
+	auto Edges = GetEdgeLinkedToLayer(Layer, StartIndex, Direction);
 	if (Edges.Num() == 0)
 	{
 		return 0.0f;
@@ -246,24 +243,24 @@ float FFormatterNode::CalcBarycenter(const TArray<FFormatterNode*>& Layer, int32
 	float Sum = 0.0f;
 	for (auto Edge : Edges)
 	{
-		Sum += Edge.LayerIndex2;
+		Sum += Edge->ToIndex;
 	}
 	return Sum / Edges.Num();
 }
 
 float FFormatterNode::CalcMedianValue(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const
 {
-	auto Edges = GetIndexedEdge(Layer, StartIndex, Direction);
+	auto Edges = GetEdgeLinkedToLayer(Layer, StartIndex, Direction);
 	float MinIndex = MAX_FLT, MaxIndex = -MAX_FLT;
 	for (auto Edge : Edges)
 	{
-		if (Edge.LayerIndex1 < MinIndex)
+		if (Edge->FromIndex < MinIndex)
 		{
-			MinIndex = Edge.LayerIndex1;
+			MinIndex = Edge->FromIndex;
 		}
-		if (Edge.LayerIndex1 > MaxIndex)
+		if (Edge->FromIndex > MaxIndex)
 		{
-			MaxIndex = Edge.LayerIndex1;
+			MaxIndex = Edge->FromIndex;
 		}
 	}
 	return (MaxIndex + MinIndex) / 2.0f;
@@ -376,9 +373,9 @@ void FFormatterNode::UpdatePinsOffset()
 	}
 }
 
-TArray<FormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes)
+TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes)
 {
-	TArray<FormatterEdge> Result;
+	TArray<FFormatterEdge> Result;
 	auto OriginalNode = Node->OriginalNode;
 	if (SubGraphs.Contains(OriginalNode->NodeGuid))
 	{
@@ -396,7 +393,7 @@ TArray<FormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSet
 					}
 					FFormatterPin* From = OriginalPinsMap[Pin];
 					FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-					Result.Add(FormatterEdge{From, To});
+					Result.Add(FFormatterEdge{ From, 0, To, 0 });
 				}
 			}
 		}
@@ -414,7 +411,7 @@ TArray<FormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSet
 				}
 				FFormatterPin* From = OriginalPinsMap[Pin];
 				FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-				Result.Add(FormatterEdge{From, To});
+				Result.Add(FFormatterEdge{ From, 0, To, 0 });
 			}
 		}
 	}
@@ -609,7 +606,7 @@ void FFormatterGraph::AddNode(FFormatterNode* InNode)
 
 void FFormatterGraph::RemoveNode(FFormatterNode* NodeToRemove)
 {
-	TArray<FormatterEdge*> Edges = NodeToRemove->InEdges;
+	TArray<FFormatterEdge*> Edges = NodeToRemove->InEdges;
 	for (auto Edge : Edges)
 	{
 		Edge->To->OwningNode->Disconnect(Edge->To, Edge->From);
@@ -894,7 +891,7 @@ void FFormatterGraph::AddDummyNodes()
 		auto& NextLayer = LayeredList[i + 1];
 		for (auto Node : Layer)
 		{
-			TArray<FormatterEdge*> LongEdges;
+			TArray<FFormatterEdge*> LongEdges;
 			for (auto Edge : Node->OutEdges)
 			{
 				if (!NextLayer.Contains(Edge->To->OwningNode))
@@ -943,13 +940,13 @@ void FFormatterGraph::SortInLayer(TArray<TArray<FFormatterNode*>>& Order, EEdGra
 	}
 }
 
-static TArray<FFormatterIndexedEdge> GetIndexedEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& Layer1, const TArray<FFormatterNode*>& Layer2, EEdGraphPinDirection Direction)
+static TArray<FFormatterEdge*> GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& Layer1, const TArray<FFormatterNode*>& Layer2, EEdGraphPinDirection Direction)
 {
 	int32 Index = 0;
-	TArray<FFormatterIndexedEdge> Result;
+	TArray<FFormatterEdge*> Result;
 	for (auto NodeInLayer1 : Layer1)
 	{
-		Result += NodeInLayer1->GetIndexedEdge(Layer2, Index, Direction);
+		Result += NodeInLayer1->GetEdgeLinkedToLayer(Layer2, Index, Direction);
 		Index += Direction == EGPD_Output ? NodeInLayer1->GetOutputPinCount() : NodeInLayer1->GetInputPinCount();
 	}
 	return Result;
@@ -962,13 +959,13 @@ static int32 CalculateCrossing(const TArray<TArray<FFormatterNode*>>& Order)
 	{
 		const auto& Layer = Order[i - 1];
 		const auto& NextLayer = Order[i];
-		TArray<FFormatterIndexedEdge> NodeEdges = GetIndexedEdgeBetweenTwoLayer(Layer, NextLayer, EGPD_Output);
+		TArray<FFormatterEdge*> NodeEdges = GetEdgeBetweenTwoLayer(Layer, NextLayer, EGPD_Output);
 		while (NodeEdges.Num() != 0)
 		{
-			auto Edge1 = NodeEdges.Pop();
-			for (auto Edge2 : NodeEdges)
+			const auto Edge1 = NodeEdges.Pop();
+			for (const auto Edge2 : NodeEdges)
 			{
-				if (Edge1.IsCrossing(Edge2))
+				if (Edge1->IsCrossing(Edge2))
 				{
 					CrossingValue++;
 				}

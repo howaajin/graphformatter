@@ -29,19 +29,14 @@ public:
 	FVector2D NodeOffset;
 };
 
-class FormatterEdge
+class FFormatterEdge
 {
 public:
 	FFormatterPin* From;
+	int32 FromIndex;
 	FFormatterPin* To;
-};
-
-class FFormatterIndexedEdge
-{
-public:
-	int32 LayerIndex1;
-	int32 LayerIndex2;
-	bool IsCrossing(const FFormatterIndexedEdge& Edge) const;
+	int32 ToIndex;
+	bool IsCrossing(const FFormatterEdge* Edge) const;
 };
 
 class FFormatterNode
@@ -51,8 +46,8 @@ public:
 	UEdGraphNode* OriginalNode;
 	FFormatterGraph* SubGraph;
 	FVector2D Size;
-	TArray<FormatterEdge*> InEdges;
-	TArray<FormatterEdge*> OutEdges;
+	TArray<FFormatterEdge*> InEdges;
+	TArray<FFormatterEdge*> OutEdges;
 	TArray<FFormatterPin*> InPins;
 	TArray<FFormatterPin*> OutPins;
 	int32 PathDepth;
@@ -72,7 +67,7 @@ public:
 	int32 GetInputPinIndex(FFormatterPin* InputPin) const;
 	int32 GetOutputPinCount() const;
 	int32 GetOutputPinIndex(FFormatterPin* OutputPin) const;
-	TArray<FFormatterIndexedEdge> GetIndexedEdge(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const;
+	TArray<FFormatterEdge*> GetEdgeLinkedToLayer(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const;
 	float CalcBarycenter(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const;
 	float CalcMedianValue(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const;
 	int32 CalcPriority(EEdGraphPinDirection Direction) const;
@@ -109,7 +104,7 @@ private:
 	void CalculateNodesSize(FCalculateNodeBoundDelegate SizeCalculator);
 	void CalculatePinsOffset(FOffsetCalculatorDelegate OffsetCalculator);
 	TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes);
-	TArray<FormatterEdge> GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes);
+	TArray<FFormatterEdge> GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes);
 	static TArray<FFormatterNode*> GetSuccessorsForNodes(TSet<FFormatterNode*> Nodes);
 	TArray<FFormatterNode*> GetNodesGreaterThan(int32 i, TSet<FFormatterNode*>& Excluded);
 	void BuildNodes(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes);
