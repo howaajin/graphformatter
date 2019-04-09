@@ -366,7 +366,7 @@ void FFormatterNode::UpdatePinsOffset()
 		{
 			return A.NodeOffset.Y < B.NodeOffset.Y;
 		});
-		InPins.Sort([](const FFormatterPin& A, const FFormatterPin& B)
+		OutPins.Sort([](const FFormatterPin& A, const FFormatterPin& B)
 		{
 			return A.NodeOffset.Y < B.NodeOffset.Y;
 		});
