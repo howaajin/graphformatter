@@ -27,6 +27,7 @@ public:
 	EEdGraphPinDirection Direction{EGPD_Input};
 	FFormatterNode* OwningNode{nullptr};
 	FVector2D NodeOffset;
+	int32 IndexInLayer{ -1 };
 };
 
 class FFormatterEdge
@@ -124,6 +125,7 @@ private:
 	FFormatterNode* FindMedianNode() const;
 	TArray<FFormatterNode*> GetLeavesWidthPathDepthEqu0() const;
 	int32 CalculateLongestPath() const;
+	void CalculatePinsIndex() const;
 	TSet<UEdGraphNode*> GetChildren(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes) const;
 	TSet<UEdGraphNode*> PickChildren(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes);
 	TSet<UEdGraphNode*> GetChildren(const UEdGraphNode* InNode) const;

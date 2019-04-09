@@ -837,6 +837,18 @@ int32 FFormatterGraph::CalculateLongestPath() const
 	return LongestPath;
 }
 
+void FFormatterGraph::CalculatePinsIndex() const
+{
+	for (int i = 0; i < LayeredList.Num(); i++)
+	{
+		auto& Layer = LayeredList[i];
+		for (int j = 0; j < Layer.Num(); j++)
+		{
+
+		}
+	}
+}
+
 TArray<FFormatterNode*> FFormatterGraph::GetLeavesWidthPathDepthEqu0() const
 {
 	TArray<FFormatterNode*> Result;
