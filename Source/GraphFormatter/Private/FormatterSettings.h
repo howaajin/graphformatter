@@ -13,6 +13,7 @@ enum class EGraphFormatterPositioningAlgorithm
 {
 	EEvenlyInLayer UMETA(DisplayName = "Place node evenly in layer"),
 	EPriorityMethod UMETA(DisplayName = "Use priority method"),
+	EFastAndSimpleMethod UMETA(DisplayName = "'Fast and simple' Method"),
 };
 
 UCLASS(config = Editor)

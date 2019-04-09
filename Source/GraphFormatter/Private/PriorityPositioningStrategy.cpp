@@ -106,48 +106,6 @@ static bool GetClosestPositionToBarycenter(const TArray<FFormatterNode*>& Slots,
 	}
 }
 
-static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes)
-{
-	TArray<FSlateRect> LayersBound;
-	const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-	FSlateRect TotalBound;
-	for (int32 i = 0; i < InLayeredNodes.Num(); i++)
-	{
-		const auto& Layer = InLayeredNodes[i];
-		FSlateRect Bound;
-		FVector2D Position;
-		if (TotalBound.IsValid())
-		{
-			Position = TotalBound.GetTopRight() + FVector2D(Settings.HorizontalSpacing, 0);
-		}
-		else
-		{
-			Position = FVector2D(0, 0);
-		}
-		for (auto Node : Layer)
-		{
-			if (Bound.IsValid())
-			{
-				Bound = Bound.Expand(FSlateRect::FromPointAndExtent(Position, Node->Size));
-			}
-			else
-			{
-				Bound = FSlateRect::FromPointAndExtent(Position, Node->Size);
-			}
-		}
-		LayersBound.Add(Bound);
-		if (TotalBound.IsValid())
-		{
-			TotalBound = TotalBound.Expand(Bound);
-		}
-		else
-		{
-			TotalBound = Bound;
-		}
-	}
-	return LayersBound;
-}
-
 static void ShiftInLayer(TArray<FFormatterNode*> Slots, int32 Index, float Distance)
 {
 	for (int32 i = 0; i < Index; i++)
@@ -242,7 +200,7 @@ FPriorityPositioningStrategy::FPriorityPositioningStrategy(TArray<TArray<FFormat
 	ensure(InLayeredNodes[0].Num() > 0);
 	FFormatterNode* FirstNode = InLayeredNodes[0][0];
 	const FVector2D OldPosition = FirstNode->GetPosition();
-	const auto LayersBound = CalculateLayersBound(InLayeredNodes);
+	const auto LayersBound = FFormatterGraph::CalculateLayersBound(InLayeredNodes);
 	for (auto& Layer : InLayeredNodes)
 	{
 		PlaceNodeInLayer(Layer);

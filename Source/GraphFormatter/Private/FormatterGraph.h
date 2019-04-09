@@ -34,10 +34,9 @@ class FFormatterEdge
 {
 public:
 	FFormatterPin* From;
-	int32 FromIndex;
 	FFormatterPin* To;
-	int32 ToIndex;
 	bool IsCrossing(const FFormatterEdge* Edge) const;
+	bool IsInnerSegment();
 };
 
 class FFormatterNode
@@ -64,13 +63,18 @@ public:
 	bool IsSource() const;
 	bool IsSink() const;
 	bool AnySuccessorPathDepthEqu0() const;
+	bool IsCrossingInnerSegment(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer) const;
+	FFormatterNode* GetMedianUpper() const;
+	FFormatterNode* GetMedianLower() const;
+	TArray<FFormatterNode*> GetUppers() const;
+	TArray<FFormatterNode*> GetLowers() const;
 	int32 GetInputPinCount() const;
 	int32 GetInputPinIndex(FFormatterPin* InputPin) const;
 	int32 GetOutputPinCount() const;
 	int32 GetOutputPinIndex(FFormatterPin* OutputPin) const;
-	TArray<FFormatterEdge*> GetEdgeLinkedToLayer(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const;
-	float CalcBarycenter(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const;
-	float CalcMedianValue(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const;
+	TArray<FFormatterEdge*> GetEdgeLinkedToLayer(const TArray<FFormatterNode*>& Layer, EEdGraphPinDirection Direction) const;
+	float CalcBarycenter(const TArray<FFormatterNode*>& Layer, EEdGraphPinDirection Direction) const;
+	float GetLinkedPositionToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction);
 	int32 CalcPriority(EEdGraphPinDirection Direction) const;
 	void InitPosition(FVector2D InPosition);
 	void SetPosition(FVector2D InPosition);
@@ -100,6 +104,15 @@ public:
 	TArray<FFormatterPin*> GetInputPins() const;
 	TArray<FFormatterPin*> GetOutputPins() const;
 	TSet<UEdGraphNode*> GetOriginalNodes() const;
+
+	/**
+	 * Get edges between two layers.
+	 */
+	static TArray<FFormatterEdge*> GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode = nullptr);
+	static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes);
+	static void CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order);
+	static void CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer);
+
 private:
 	static TArray<TSet<UEdGraphNode*>> FindIsolated(UEdGraph* InGraph, const TSet<UEdGraphNode*>& SelectedNodes);
 	void CalculateNodesSize(FCalculateNodeBoundDelegate SizeCalculator);
@@ -125,7 +138,6 @@ private:
 	FFormatterNode* FindMedianNode() const;
 	TArray<FFormatterNode*> GetLeavesWidthPathDepthEqu0() const;
 	int32 CalculateLongestPath() const;
-	void CalculatePinsIndex() const;
 	TSet<UEdGraphNode*> GetChildren(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes) const;
 	TSet<UEdGraphNode*> PickChildren(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes);
 	TSet<UEdGraphNode*> GetChildren(const UEdGraphNode* InNode) const;

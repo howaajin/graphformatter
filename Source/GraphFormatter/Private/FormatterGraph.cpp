@@ -11,10 +11,17 @@
 #include "IPositioningStrategy.h"
 #include "EvenlyPlaceStrategy.h"
 #include "PriorityPositioningStrategy.h"
+#include "FastAndSimplePositioningStrategy.h"
 
 bool FFormatterEdge::IsCrossing(const FFormatterEdge* Edge) const
 {
-	return FromIndex < Edge->FromIndex && ToIndex > Edge->ToIndex || FromIndex > Edge->FromIndex && ToIndex < Edge->ToIndex;
+	return From->IndexInLayer < Edge->From->IndexInLayer && To->IndexInLayer > Edge->To->IndexInLayer
+		|| From->IndexInLayer > Edge->From->IndexInLayer && To->IndexInLayer < Edge->To->IndexInLayer;
+}
+
+bool FFormatterEdge::IsInnerSegment()
+{
+	return From->OwningNode->OriginalNode == nullptr && To->OwningNode->OriginalNode == nullptr;
 }
 
 FFormatterNode::FFormatterNode(UEdGraphNode* InNode)
@@ -188,6 +195,99 @@ bool FFormatterNode::AnySuccessorPathDepthEqu0() const
 	return false;
 }
 
+float FFormatterNode::GetLinkedPositionToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction)
+{
+	auto& Edges = Direction == EGPD_Input ? InEdges : OutEdges;
+	float MedianPosition = 0.0f;
+	int32 Count = 0;
+	for (auto Edge : Edges)
+	{
+		if (Edge->To->OwningNode == Node)
+		{
+			MedianPosition += Edge->From->NodeOffset.Y;
+			++Count;
+		}
+	}
+	if (Count == 0)
+	{
+		return 0.0f;
+	}
+	return MedianPosition / Count;
+}
+
+bool FFormatterNode::IsCrossingInnerSegment(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer) const
+{
+	auto EdgesLinkedToUpper = GetEdgeLinkedToLayer(UpperLayer, EGPD_Input);
+	auto EdgesBetweenTwoLayers = FFormatterGraph::GetEdgeBetweenTwoLayer(LowerLayer, UpperLayer, this);
+	for (auto EdgeLinkedToUpper : EdgesLinkedToUpper)
+	{
+		for (auto EdgeBetweenTwoLayers : EdgesBetweenTwoLayers)
+		{
+			if (EdgeBetweenTwoLayers->IsInnerSegment() && EdgeLinkedToUpper->IsCrossing(EdgeBetweenTwoLayers))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+FFormatterNode* FFormatterNode::GetMedianUpper() const
+{
+	TArray<FFormatterNode*> UpperNodes;
+	for (auto InEdge : InEdges)
+	{
+		if (!UpperNodes.Contains(InEdge->To->OwningNode))
+		{
+			UpperNodes.Add(InEdge->To->OwningNode);
+		}
+	}
+	if (UpperNodes.Num() > 0)
+	{
+		const int32 m = UpperNodes.Num() / 2;
+		return UpperNodes[m];
+	}
+	return nullptr;
+}
+
+FFormatterNode* FFormatterNode::GetMedianLower() const
+{
+	TArray<FFormatterNode*> LowerNodes;
+	for (auto OutEdge : OutEdges)
+	{
+		if (!LowerNodes.Contains(OutEdge->To->OwningNode))
+		{
+			LowerNodes.Add(OutEdge->To->OwningNode);
+		}
+	}
+	if (LowerNodes.Num() > 0)
+	{
+		const int32 m = LowerNodes.Num() / 2;
+		return LowerNodes[m];
+	}
+	return nullptr;
+}
+
+TArray<FFormatterNode*> FFormatterNode::GetUppers() const
+{
+	TSet<FFormatterNode*> UpperNodes;
+	for (auto InEdge : InEdges)
+	{
+		UpperNodes.Add(InEdge->To->OwningNode);
+	}
+	return UpperNodes.Array();
+}
+
+TArray<FFormatterNode*> FFormatterNode::GetLowers() const
+{
+	TSet<FFormatterNode*> LowerNodes;
+	for (auto OutEdge : OutEdges)
+	{
+		LowerNodes.Add(OutEdge->To->OwningNode);
+	}
+	return LowerNodes.Array();
+}
+
 int32 FFormatterNode::GetInputPinCount() const
 {
 	return InPins.Num();
@@ -208,24 +308,16 @@ int32 FFormatterNode::GetOutputPinIndex(FFormatterPin* OutputPin) const
 	return OutPins.Find(OutputPin);
 }
 
-TArray<FFormatterEdge*> FFormatterNode::GetEdgeLinkedToLayer(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const
+TArray<FFormatterEdge*> FFormatterNode::GetEdgeLinkedToLayer(const TArray<FFormatterNode*>& Layer, EEdGraphPinDirection Direction) const
 {
 	TArray<FFormatterEdge*> Result;
 	const TArray<FFormatterEdge*>& Edges = Direction == EGPD_Output ? OutEdges : InEdges;
 	for (auto Edge : Edges)
 	{
-		int32 Index = 0;
 		for (auto NextLayerNode : Layer)
 		{
-			if (Edge->To->OwningNode != NextLayerNode)
+			if (Edge->To->OwningNode == NextLayerNode)
 			{
-				Index += Direction == EGPD_Output ? NextLayerNode->GetInputPinCount() : NextLayerNode->GetOutputPinCount();
-			}
-			else
-			{
-				Index += Direction == EGPD_Output ? NextLayerNode->GetInputPinIndex(Edge->To) : NextLayerNode->GetOutputPinIndex(Edge->To);
-				Edge->FromIndex = StartIndex + (Direction == EGPD_Output ? GetOutputPinIndex(Edge->From) : GetInputPinIndex(Edge->From));
-				Edge->ToIndex = Index;
 				Result.Add(Edge);
 			}
 		}
@@ -233,9 +325,9 @@ TArray<FFormatterEdge*> FFormatterNode::GetEdgeLinkedToLayer(const TArray<FForma
 	return Result;
 }
 
-float FFormatterNode::CalcBarycenter(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const
+float FFormatterNode::CalcBarycenter(const TArray<FFormatterNode*>& Layer, EEdGraphPinDirection Direction) const
 {
-	auto Edges = GetEdgeLinkedToLayer(Layer, StartIndex, Direction);
+	auto Edges = GetEdgeLinkedToLayer(Layer, Direction);
 	if (Edges.Num() == 0)
 	{
 		return 0.0f;
@@ -243,27 +335,9 @@ float FFormatterNode::CalcBarycenter(const TArray<FFormatterNode*>& Layer, int32
 	float Sum = 0.0f;
 	for (auto Edge : Edges)
 	{
-		Sum += Edge->ToIndex;
+		Sum += Edge->To->IndexInLayer;
 	}
 	return Sum / Edges.Num();
-}
-
-float FFormatterNode::CalcMedianValue(const TArray<FFormatterNode*>& Layer, int32 StartIndex, EEdGraphPinDirection Direction) const
-{
-	auto Edges = GetEdgeLinkedToLayer(Layer, StartIndex, Direction);
-	float MinIndex = MAX_FLT, MaxIndex = -MAX_FLT;
-	for (auto Edge : Edges)
-	{
-		if (Edge->FromIndex < MinIndex)
-		{
-			MinIndex = Edge->FromIndex;
-		}
-		if (Edge->FromIndex > MaxIndex)
-		{
-			MaxIndex = Edge->FromIndex;
-		}
-	}
-	return (MaxIndex + MinIndex) / 2.0f;
 }
 
 int32 FFormatterNode::CalcPriority(EEdGraphPinDirection Direction) const
@@ -393,7 +467,7 @@ TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSe
 					}
 					FFormatterPin* From = OriginalPinsMap[Pin];
 					FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-					Result.Add(FFormatterEdge{ From, 0, To, 0 });
+					Result.Add(FFormatterEdge{ From, To });
 				}
 			}
 		}
@@ -411,7 +485,7 @@ TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSe
 				}
 				FFormatterPin* From = OriginalPinsMap[Pin];
 				FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-				Result.Add(FFormatterEdge{ From, 0, To, 0 });
+				Result.Add(FFormatterEdge{ From, To });
 			}
 		}
 	}
@@ -837,15 +911,30 @@ int32 FFormatterGraph::CalculateLongestPath() const
 	return LongestPath;
 }
 
-void FFormatterGraph::CalculatePinsIndex() const
+void FFormatterGraph::CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order)
 {
-	for (int i = 0; i < LayeredList.Num(); i++)
+	for (int32 i = 0; i < Order.Num(); i++)
 	{
-		auto& Layer = LayeredList[i];
-		for (int j = 0; j < Layer.Num(); j++)
-		{
+		auto& Layer = Order[i];
+		CalculatePinsIndexInLayer(Layer);
+	}
+}
 
+void FFormatterGraph::CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer)
+{
+	int32 InPinStartIndex = 0, OutPinStartIndex = 0;
+	for (int32 j = 0; j < Layer.Num(); j++)
+	{
+		for (auto InPin : Layer[j]->InPins)
+		{
+			InPin->IndexInLayer = InPinStartIndex + Layer[j]->GetInputPinIndex(InPin);
 		}
+		for (auto OutPin : Layer[j]->OutPins)
+		{
+			OutPin->IndexInLayer = OutPinStartIndex + Layer[j]->GetOutputPinIndex(OutPin);
+		}
+		OutPinStartIndex += Layer[j]->GetOutputPinCount();
+		InPinStartIndex += Layer[j]->GetInputPinCount();
 	}
 }
 
@@ -919,6 +1008,7 @@ void FFormatterGraph::AddDummyNodes()
 				Node->Connect(Edge->From, dummyNode->InPins[0]);
 				dummyNode->Connect(dummyNode->InPins[0], Edge->From);
 				dummyNode->Connect(dummyNode->OutPins[0], Edge->To);
+				Edge->To->OwningNode->Disconnect(Edge->To, Edge->From);
 				Edge->To->OwningNode->Connect(Edge->To, dummyNode->OutPins[0]);
 				NextLayer.Add(dummyNode);
 			}
@@ -939,39 +1029,83 @@ void FFormatterGraph::SortInLayer(TArray<TArray<FFormatterNode*>>& Order, EEdGra
 	{
 		auto& FixedLayer = Order[i - Step];
 		auto& FreeLayer = Order[i];
-		int32 StartIndex = 0;
 		for (FFormatterNode* Node : FreeLayer)
 		{
-			Node->OrderValue = Node->CalcBarycenter(FixedLayer, StartIndex, Direction);
-			StartIndex += Direction == EGPD_Output ? Node->GetOutputPinCount() : Node->GetInputPinCount();
+			Node->OrderValue = Node->CalcBarycenter(FixedLayer, Direction);
 		}
-		FreeLayer.Sort([](const FFormatterNode& A, const FFormatterNode& B)-> bool
+		FreeLayer.StableSort([](const FFormatterNode& A, const FFormatterNode& B)-> bool
 		{
 			return A.OrderValue < B.OrderValue;
 		});
+		CalculatePinsIndexInLayer(FreeLayer);
 	}
 }
 
-static TArray<FFormatterEdge*> GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& Layer1, const TArray<FFormatterNode*>& Layer2, EEdGraphPinDirection Direction)
+TArray<FFormatterEdge*> FFormatterGraph::GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode)
 {
-	int32 Index = 0;
 	TArray<FFormatterEdge*> Result;
-	for (auto NodeInLayer1 : Layer1)
+	for (auto Node : LowerLayer)
 	{
-		Result += NodeInLayer1->GetEdgeLinkedToLayer(Layer2, Index, Direction);
-		Index += Direction == EGPD_Output ? NodeInLayer1->GetOutputPinCount() : NodeInLayer1->GetInputPinCount();
+		if (ExcludedNode == Node)
+		{
+			continue;
+		}
+		Result += Node->GetEdgeLinkedToLayer(UpperLayer, EGPD_Input);
 	}
 	return Result;
 }
 
+TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes)
+{
+	TArray<FSlateRect> LayersBound;
+	const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+	FSlateRect TotalBound;
+	for (int32 i = 0; i < InLayeredNodes.Num(); i++)
+	{
+		const auto& Layer = InLayeredNodes[i];
+		FSlateRect Bound;
+		FVector2D Position;
+		if (TotalBound.IsValid())
+		{
+			Position = TotalBound.GetTopRight() + FVector2D(Settings.HorizontalSpacing, 0);
+		}
+		else
+		{
+			Position = FVector2D(0, 0);
+		}
+		for (auto Node : Layer)
+		{
+			if (Bound.IsValid())
+			{
+				Bound = Bound.Expand(FSlateRect::FromPointAndExtent(Position, Node->Size));
+			}
+			else
+			{
+				Bound = FSlateRect::FromPointAndExtent(Position, Node->Size);
+			}
+		}
+		LayersBound.Add(Bound);
+		if (TotalBound.IsValid())
+		{
+			TotalBound = TotalBound.Expand(Bound);
+		}
+		else
+		{
+			TotalBound = Bound;
+		}
+	}
+	return LayersBound;
+}
+
 static int32 CalculateCrossing(const TArray<TArray<FFormatterNode*>>& Order)
 {
+	FFormatterGraph::CalculatePinsIndex(Order);
 	int32 CrossingValue = 0;
 	for (int i = 1; i < Order.Num(); i++)
 	{
-		const auto& Layer = Order[i - 1];
-		const auto& NextLayer = Order[i];
-		TArray<FFormatterEdge*> NodeEdges = GetEdgeBetweenTwoLayer(Layer, NextLayer, EGPD_Output);
+		const auto& UpperLayer = Order[i - 1];
+		const auto& LowerLayer = Order[i];
+		TArray<FFormatterEdge*> NodeEdges = FFormatterGraph::GetEdgeBetweenTwoLayer(LowerLayer, UpperLayer);
 		while (NodeEdges.Num() != 0)
 		{
 			const auto Edge1 = NodeEdges.Pop();
@@ -992,12 +1126,15 @@ void FFormatterGraph::DoOrderingSweep()
 	const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
 	auto Best = LayeredList;
 	auto Order = LayeredList;
+	int32 BestCrossing = INT_MAX;
 	for (int i = 0; i < Settings->MaxOrderingIterations; i++)
 	{
 		SortInLayer(Order, i % 2 == 0 ? EGPD_Input : EGPD_Output);
-		if (CalculateCrossing(Order) < CalculateCrossing(Best))
+		const int32 NewCrossing = CalculateCrossing(Order);
+		if (NewCrossing < BestCrossing)
 		{
 			Best = Order;
+			BestCrossing = NewCrossing;
 		}
 	}
 	LayeredList = Best;
@@ -1015,6 +1152,11 @@ void FFormatterGraph::DoPositioning()
 	{
 		FPriorityPositioningStrategy PriorityPositioningStrategy(LayeredList);
 		TotalBound = PriorityPositioningStrategy.GetTotalBound();
+	}
+	if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethod)
+	{
+		FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList);
+		TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
 	}
 }
 

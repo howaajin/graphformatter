@@ -6,7 +6,7 @@
 #include "FormatterSettings.h"
 
 UFormatterSettings::UFormatterSettings()
-	: PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EPriorityMethod)
+	: PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethod)
 	, CommentBorder(45)
 	, HorizontalSpacing(100)
 	, VerticalSpacing(80)

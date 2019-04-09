@@ -7,9 +7,35 @@
 
 #include "IPositioningStrategy.h"
 
-class FastAndSimplePositioningStrategy : public IPositioningStrategy
+class FFastAndSimplePositioningStrategy : public IPositioningStrategy
 {
+	TMap<FFormatterNode*, FFormatterNode*> ConflictMarks;
+	TMap<FFormatterNode*, FFormatterNode*> RootMap;
+	TMap<FFormatterNode*, FFormatterNode*> AlignMap;
+	TMap<FFormatterNode*, FFormatterNode*> SinkMap;
+	TMap<FFormatterNode*, float> ShiftMap;
+	TMap<FFormatterNode*, float> InnerShiftMap;
+	TMap<FFormatterNode*, float>* XMap;
+	TMap<FFormatterNode*, int32> PosMap;
+	TMap<FFormatterNode*, float> BlockWidthMap;
+	TMap<FFormatterNode*, FFormatterNode*> PredecessorMap;
+	TMap<FFormatterNode*, FFormatterNode*> SuccessorMap;
+	TMap<FFormatterNode*, float> UpperLeftPositionMap;
+	TMap<FFormatterNode*, float> UpperRightPositionMap;
+	TMap<FFormatterNode*, float> LowerLeftPositionMap;
+	TMap<FFormatterNode*, float> LowerRightPositionMap;
+	TMap<FFormatterNode*, float> CombinedPositionMap;
+	bool IsUpperDirection;
+	bool IsLeftDirection;
+	void Initialize();
 	void MarkConflicts();
+	void DoVerticalAlignment();
+	void DoHorizontalCompaction();
+	void PlaceBlock(FFormatterNode* BlockRoot);
+	void CalculateInnerShift();
+	void Sweep();
+	void Combine();
+	void DoOnePass();
 public:
-	explicit FastAndSimplePositioningStrategy(TArray<TArray<FFormatterNode*> >& InLayeredNodes);
+	explicit FFastAndSimplePositioningStrategy(TArray<TArray<FFormatterNode*> >& InLayeredNodes);
 };
