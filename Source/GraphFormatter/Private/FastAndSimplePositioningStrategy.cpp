@@ -329,13 +329,21 @@ void FFastAndSimplePositioningStrategy::Combine()
 			}
 		}
 	}
+	const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
 	for (auto& Layer : LayeredNodes)
 	{
 		for (auto Node : Layer)
 		{
 			TArray<float> Values = {Layouts[0][Node], Layouts[1][Node], Layouts[2][Node], Layouts[3][Node]};
 			Values.Sort();
-			CombinedPositionMap.Add(Node, (Values[1] + Values[2]) / 2.0f);
+			if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
+			{
+				CombinedPositionMap.Add(Node, (Values[1] + Values[2]) / 2.0f);
+			}
+			else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
+			{
+				CombinedPositionMap.Add(Node, (Values[0] + Values[3]) / 2.0f);
+			}
 		}
 	}
 	XMap = &CombinedPositionMap;

@@ -55,8 +55,9 @@ void FFormatterModule::StartupModule()
 	FFormatterCommands::Register();
 	GraphEditorDelegateHandle = FAssetEditorManager::Get().OnAssetOpenedInEditor().AddRaw(this, &FFormatterModule::HandleAssetEditorOpened);
 	AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)));
-	AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EPriorityMethod)));
-	AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethod)));
+	AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)));
+	AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)));
+	AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::ELayerSweep)));
 }
 
 static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
@@ -156,10 +157,12 @@ static FText GetEnumAsString(EGraphFormatterPositioningAlgorithm EnumValue)
 	{
 	case EGraphFormatterPositioningAlgorithm::EEvenlyInLayer:
 		return FText::FromString("Place node evenly in layer");
-	case EGraphFormatterPositioningAlgorithm::EPriorityMethod:
-		return FText::FromString("Use priority method");
-	case EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethod:
-		return FText::FromString("'Fast and simple' Method");
+	case EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop:
+		return FText::FromString("FAS Top");
+	case EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian:
+		return FText::FromString("FAS Median");
+	case EGraphFormatterPositioningAlgorithm::ELayerSweep:
+		return FText::FromString("Layer sweep");
 	default:
 		return FText::FromString("Invalid");
 	}

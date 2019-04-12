@@ -1148,15 +1148,15 @@ void FFormatterGraph::DoPositioning()
 		FEvenlyPlaceStrategy LeftToRightPositioningStrategy(LayeredList);
 		TotalBound = LeftToRightPositioningStrategy.GetTotalBound();
 	}
-	if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EPriorityMethod)
-	{
-		FPriorityPositioningStrategy PriorityPositioningStrategy(LayeredList);
-		TotalBound = PriorityPositioningStrategy.GetTotalBound();
-	}
-	if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethod)
+	if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
 	{
 		FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList);
 		TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
+	}
+	if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::ELayerSweep)
+	{
+		FPriorityPositioningStrategy PriorityPositioningStrategy(LayeredList);
+		TotalBound = PriorityPositioningStrategy.GetTotalBound();
 	}
 }
 
