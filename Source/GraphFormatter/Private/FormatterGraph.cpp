@@ -15,8 +15,8 @@
 
 bool FFormatterEdge::IsCrossing(const FFormatterEdge* Edge) const
 {
-	return From->IndexInLayer < Edge->From->IndexInLayer && To->IndexInLayer > Edge->To->IndexInLayer
-		|| From->IndexInLayer > Edge->From->IndexInLayer && To->IndexInLayer < Edge->To->IndexInLayer;
+	return (From->IndexInLayer < Edge->From->IndexInLayer && To->IndexInLayer > Edge->To->IndexInLayer)
+		|| (From->IndexInLayer > Edge->From->IndexInLayer && To->IndexInLayer < Edge->To->IndexInLayer);
 }
 
 bool FFormatterEdge::IsInnerSegment()
