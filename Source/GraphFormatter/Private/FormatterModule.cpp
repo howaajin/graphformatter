@@ -273,6 +273,7 @@ void FFormatterModule::FormatGraph(FFormatterDelegates GraphDelegates)
 		}
 	}
 	Graph->NotifyGraphChanged();
+	GraphDelegates.MarkGraphDirty.ExecuteIfBound();
 }
 
 void FFormatterModule::ShutdownModule()

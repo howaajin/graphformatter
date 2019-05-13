@@ -245,6 +245,10 @@ FFormatterDelegates FFormatterHacker::GetDelegates(UObject* Object, IAssetEditor
 		if (MaterialEditor)
 		{
 			GraphFormatterDelegates = ::GetDelegates(MaterialEditor);
+			GraphFormatterDelegates.MarkGraphDirty.BindLambda([MaterialEditor]()
+				{
+					MaterialEditor->bMaterialDirty = true;
+				});
 			return GraphFormatterDelegates;
 		}
 	}
