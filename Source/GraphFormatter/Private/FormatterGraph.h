@@ -74,7 +74,7 @@ public:
 	int32 GetOutputPinIndex(FFormatterPin* OutputPin) const;
 	TArray<FFormatterEdge*> GetEdgeLinkedToLayer(const TArray<FFormatterNode*>& Layer, EEdGraphPinDirection Direction) const;
 	float CalcBarycenter(const TArray<FFormatterNode*>& Layer, EEdGraphPinDirection Direction) const;
-	float GetLinkedPositionToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction);
+	float GetLinkedPositionToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction, bool IsHorizontalDirection = true);
 	int32 CalcPriority(EEdGraphPinDirection Direction) const;
 	void InitPosition(FVector2D InPosition);
 	void SetPosition(FVector2D InPosition);
@@ -109,7 +109,7 @@ public:
 	 * Get edges between two layers.
 	 */
 	static TArray<FFormatterEdge*> GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode = nullptr);
-	static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes);
+	static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true);
 	static void CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order);
 	static void CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer);
 

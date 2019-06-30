@@ -155,7 +155,7 @@ void FFastAndSimplePositioningStrategy::DoHorizontalCompaction()
 			(*XMap)[Node] = (*XMap)[RootNode];
 		}
 	}
-	for(auto& Layer : LayeredNodes)
+	for (auto& Layer : LayeredNodes)
 	{
 		for (auto Node : Layer)
 		{
@@ -189,6 +189,21 @@ void FFastAndSimplePositioningStrategy::PlaceBlock(FFormatterNode* BlockRoot)
 			const auto Adjacency = IsLeftDirection ? PredecessorMap[Node] : SuccessorMap[Node];
 			if (Adjacency != nullptr)
 			{
+				float AdjacencyHeight, NodeHeight;
+				float Spacing;
+				if (IsHorizontalDirection)
+				{
+					AdjacencyHeight = Adjacency->Size.Y;
+					NodeHeight = Node->Size.Y;
+					Spacing = Settings.VerticalSpacing;
+				}
+				else
+				{
+					AdjacencyHeight = Adjacency->Size.X;
+					NodeHeight = Node->Size.X;
+					Spacing = Settings.HorizontalSpacing;
+				}
+
 				const auto PrevBlockRoot = RootMap[Adjacency];
 				PlaceBlock(PrevBlockRoot);
 				if (SinkMap[BlockRoot] == BlockRoot)
@@ -197,15 +212,15 @@ void FFastAndSimplePositioningStrategy::PlaceBlock(FFormatterNode* BlockRoot)
 				}
 				if (SinkMap[BlockRoot] != SinkMap[PrevBlockRoot])
 				{
-					float LeftShift = (*XMap)[BlockRoot] - (*XMap)[PrevBlockRoot] + InnerShiftMap[Node] - InnerShiftMap[Adjacency] - Adjacency->Size.Y - Settings.VerticalSpacing;
-					float RightShift = (*XMap)[PrevBlockRoot] - (*XMap)[BlockRoot] - InnerShiftMap[Node] + InnerShiftMap[Adjacency] - Node->Size.Y + Settings.VerticalSpacing;
+					float LeftShift = (*XMap)[BlockRoot] - (*XMap)[PrevBlockRoot] + InnerShiftMap[Node] - InnerShiftMap[Adjacency] - AdjacencyHeight - Spacing;
+					float RightShift = (*XMap)[PrevBlockRoot] - (*XMap)[BlockRoot] - InnerShiftMap[Node] + InnerShiftMap[Adjacency] - NodeHeight + Spacing;
 					float Shift = IsLeftDirection ? FMath::Min(ShiftMap[SinkMap[PrevBlockRoot]], LeftShift) : FMath::Max(ShiftMap[SinkMap[PrevBlockRoot]], RightShift);
 					ShiftMap[SinkMap[PrevBlockRoot]] = Shift;
 				}
 				else
 				{
-					float LeftShift = InnerShiftMap[Adjacency] + Adjacency->Size.Y - InnerShiftMap[Node] + Settings.VerticalSpacing;
-					float RightShift = -Node->Size.Y - Settings.VerticalSpacing + InnerShiftMap[Adjacency] - InnerShiftMap[Node];
+					float LeftShift = InnerShiftMap[Adjacency] + AdjacencyHeight - InnerShiftMap[Node] + Spacing;
+					float RightShift = -NodeHeight - Spacing + InnerShiftMap[Adjacency] - InnerShiftMap[Node];
 					float Shift = IsLeftDirection ? LeftShift : RightShift;
 					float Position = (*XMap)[PrevBlockRoot] + Shift;
 					if (Initial)
@@ -237,21 +252,21 @@ void FFastAndSimplePositioningStrategy::CalculateInnerShift()
 			if (RootMap[Node] == Node)
 			{
 				InnerShiftMap.Add(Node, 0);
-				float Left = 0, Right = Node->Size.Y;
+				float Left = 0, Right = IsHorizontalDirection ? Node->Size.Y : Node->Size.X;
 				auto RootNode = Node;
 				auto UpperNode = Node;
 				auto LowerNode = AlignMap[RootNode];
 				while (true)
 				{
-					const float UpperPosition = UpperNode->GetLinkedPositionToNode(LowerNode, IsUpperDirection ? EGPD_Output : EGPD_Input);
-					const float LowerPosition = LowerNode->GetLinkedPositionToNode(UpperNode, IsUpperDirection ? EGPD_Input : EGPD_Output);
+					const float UpperPosition = UpperNode->GetLinkedPositionToNode(LowerNode, IsUpperDirection ? EGPD_Output : EGPD_Input, IsHorizontalDirection);
+					const float LowerPosition = LowerNode->GetLinkedPositionToNode(UpperNode, IsUpperDirection ? EGPD_Input : EGPD_Output, IsHorizontalDirection);
 					const float Shift = InnerShiftMap[UpperNode] + UpperPosition - LowerPosition;
 					InnerShiftMap.FindOrAdd(LowerNode) = Shift;
 					Left = FMath::Min(Left, Shift);
-					Right = FMath::Max(Right, Shift + LowerNode->Size.Y);
+					Right = FMath::Max(Right, Shift + (IsHorizontalDirection ? LowerNode->Size.Y : LowerNode->Size.X));
 					UpperNode = LowerNode;
 					LowerNode = AlignMap[UpperNode];
-					if(LowerNode == RootNode)
+					if (LowerNode == RootNode)
 					{
 						break;
 					}
@@ -316,7 +331,7 @@ void FFastAndSimplePositioningStrategy::Combine()
 				RightMost = Pair.Value;
 			}
 		}
-		if(RightMost - LeftMost < MinWidth)
+		if (RightMost - LeftMost < MinWidth)
 		{
 			MinWidth = RightMost - LeftMost;
 			MinWidthIndex = i;
@@ -341,13 +356,20 @@ void FFastAndSimplePositioningStrategy::Combine()
 		{
 			TArray<float> Values = {Layouts[0][Node], Layouts[1][Node], Layouts[2][Node], Layouts[3][Node]};
 			Values.Sort();
-			if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
-			{
-				CombinedPositionMap.Add(Node, (Values[1] + Values[2]) / 2.0f);
-			}
-			else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
+			if (!IsHorizontalDirection)
 			{
 				CombinedPositionMap.Add(Node, (Values[0] + Values[3]) / 2.0f);
+			}
+			else
+			{
+				if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
+				{
+					CombinedPositionMap.Add(Node, (Values[1] + Values[2]) / 2.0f);
+				}
+				else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
+				{
+					CombinedPositionMap.Add(Node, (Values[0] + Values[3]) / 2.0f);
+				}
 			}
 		}
 	}
@@ -361,10 +383,10 @@ void FFastAndSimplePositioningStrategy::DoOnePass()
 	DoHorizontalCompaction();
 }
 
-FFastAndSimplePositioningStrategy::FFastAndSimplePositioningStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes)
-	: IPositioningStrategy(InLayeredNodes)
+FFastAndSimplePositioningStrategy::FFastAndSimplePositioningStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection)
+	: IPositioningStrategy(InLayeredNodes), IsHorizontalDirection(IsHorizontalDirection)
 {
-	const auto LayersBound = FFormatterGraph::CalculateLayersBound(InLayeredNodes);
+	const auto LayersBound = FFormatterGraph::CalculateLayersBound(InLayeredNodes, IsHorizontalDirection);
 	FFormatterNode* FirstNode = InLayeredNodes[0][0];
 	const FVector2D OldPosition = FirstNode->GetPosition();
 	Initialize();
@@ -374,16 +396,41 @@ FFastAndSimplePositioningStrategy::FFastAndSimplePositioningStrategy(TArray<TArr
 		auto& Layer = LayeredNodes[i];
 		for (auto Node : Layer)
 		{
-			float X;
-			if (Node->InEdges.Num() == 0)
+			float X, Y;
+			float *pX, *pY;
+			if (IsHorizontalDirection)
 			{
-				X = LayersBound[i].GetTopRight().X - Node->Size.X;
+				pX = &X;
+				pY = &Y;
 			}
 			else
 			{
-				X = LayersBound[i].GetTopLeft().X;
+				pX = &Y;
+				pY = &X;
 			}
-			float Y = (*XMap)[Node];
+			if (Node->InEdges.Num() == 0)
+			{
+				if (IsHorizontalDirection)
+				{
+					*pX = LayersBound[i].GetTopRight().X - Node->Size.X;
+				}
+				else
+				{
+					*pX = LayersBound[i].GetBottomRight().Y - Node->Size.Y;
+				}
+			}
+			else
+			{
+				if (IsHorizontalDirection)
+				{
+					*pX = LayersBound[i].GetTopLeft().X;
+				}
+				else
+				{
+					*pX = LayersBound[i].GetTopRight().Y;
+				}
+			}
+			*pY = (*XMap)[Node];
 			Node->SetPosition(FVector2D(X, Y));
 		}
 	}

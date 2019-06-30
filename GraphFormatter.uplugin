@@ -1,7 +1,7 @@
 {
 	"FileVersion": 3,
-	"Version": 2,
-	"VersionName": "2.2",
+	"Version": 3,
+	"VersionName": "2.2.2",
 	"FriendlyName": "GraphFormatter",
 	"Description": "Auto arrange graph nodes.",
 	"Category": "Utility",

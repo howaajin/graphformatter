@@ -7,6 +7,7 @@
 
 #include "CoreMinimal.h"
 
+class FFormatterNode;
 class UEdGraph;
 class SGraphEditor;
 class UEdGraphNode;
@@ -15,8 +16,10 @@ class UEdGraphPin;
 DECLARE_DELEGATE_RetVal(UEdGraph*, FGetGraphDelegate);
 DECLARE_DELEGATE_RetVal(SGraphEditor*, FGetGraphEditorDelegate);
 DECLARE_DELEGATE_RetVal(void, FMarkGraphDirty);
+DECLARE_DELEGATE_RetVal(bool, FIsVerticalPositioning);
 DECLARE_DELEGATE_RetVal_OneParam(FVector2D, FCalculateNodeBoundDelegate, UEdGraphNode*);
 DECLARE_DELEGATE_RetVal_OneParam(FVector2D, FOffsetCalculatorDelegate, UEdGraphPin*);
+DECLARE_DELEGATE_RetVal_TwoParams(bool, FNodeComparer, const FFormatterNode&, const FFormatterNode&);
 
 struct FFormatterDelegates
 {
@@ -25,4 +28,6 @@ struct FFormatterDelegates
 	FGetGraphEditorDelegate GetGraphEditorDelegate;
 	FOffsetCalculatorDelegate OffsetCalculator;
 	FMarkGraphDirty MarkGraphDirty;
+	FIsVerticalPositioning IsVerticalPositioning;
+	FNodeComparer NodeComparer;
 };

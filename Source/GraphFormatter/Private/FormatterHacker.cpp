@@ -20,6 +20,8 @@
 #include "Sound/SoundCue.h"
 #include "FormatterDelegates.h"
 #include "Framework/Application/SlateApplication.h"
+#include "Editor/BehaviorTreeEditor/Private/BehaviorTreeEditor.h"
+#include "FormatterGraph.h"
 
 /* 
 ** Offsets for the purpose of debug, only tested on Win64
@@ -46,6 +48,7 @@ struct FAccessSGraphPanelPostChangedZoom
 {
 	using MemberType = FunctionWrapper<SNodePanel, void>::Signature;
 };
+
 template struct FPrivateRob<FAccessSGraphPanelPostChangedZoom, &SNodePanel::PostChangedZoom>;
 DECLARE_PRIVATE_CONST_FUNC_ACCESSOR(FAccessSGraphNodeCommentHandleSelection, SGraphNodeComment, HandleSelection, void, bool, bool)
 
@@ -97,6 +100,16 @@ SGraphEditor* GetGraphEditor(const FSoundCueEditor* Editor)
 	return nullptr;
 }
 
+SGraphEditor* GetGraphEditor(const FBehaviorTreeEditor* Editor)
+{
+	auto& GraphEditor = Editor->*FPrivateAccessor<FAccessAIGraphEditor>::Member;
+	if (GraphEditor.IsValid())
+	{
+		return GraphEditor.Pin().Get();
+	}
+	return nullptr;
+}
+
 SGraphPanel* GetGraphPanel(const SGraphEditor* GraphEditor)
 {
 #if UE_BUILD_DEBUG
@@ -110,7 +123,7 @@ SGraphPanel* GetGraphPanel(const SGraphEditor* GraphEditor)
 #else
 	auto& GraphPanel = GraphEditorImpl->*FPrivateAccessor<FAccessSGraphEditorPanel>::Member;
 #endif
-	if(GraphPanel.IsValid())
+	if (GraphPanel.IsValid())
 	{
 		return GraphPanel.Get();
 	}
@@ -145,7 +158,7 @@ static SGraphNode* GetGraphNode(const SGraphEditor* GraphEditor, const UEdGraphN
 static void TickWidgetRecursively(SWidget* Widget)
 {
 	Widget->GetChildren();
-	if(auto Children = Widget->GetChildren())
+	if (auto Children = Widget->GetChildren())
 	{
 		for (int32 ChildIndex = 0; ChildIndex < Children->Num(); ++ChildIndex)
 		{
@@ -246,9 +259,9 @@ FFormatterDelegates FFormatterHacker::GetDelegates(UObject* Object, IAssetEditor
 		{
 			GraphFormatterDelegates = ::GetDelegates(MaterialEditor);
 			GraphFormatterDelegates.MarkGraphDirty.BindLambda([MaterialEditor]()
-				{
-					MaterialEditor->bMaterialDirty = true;
-				});
+			{
+				MaterialEditor->bMaterialDirty = true;
+			});
 			return GraphFormatterDelegates;
 		}
 	}
@@ -261,13 +274,38 @@ FFormatterDelegates FFormatterHacker::GetDelegates(UObject* Object, IAssetEditor
 			return GraphFormatterDelegates;
 		}
 	}
+	if (Cast<UBehaviorTree>(Object))
+	{
+		FBehaviorTreeEditor* BehaviorTreeEditor = StaticCast<FBehaviorTreeEditor*>(Instance);
+		if (BehaviorTreeEditor)
+		{
+			GraphFormatterDelegates = ::GetDelegates(BehaviorTreeEditor);
+			GraphFormatterDelegates.IsVerticalPositioning.BindLambda([]()
+			{
+				return true;
+			});
+			GraphFormatterDelegates.NodeComparer.BindLambda([](const FFormatterNode& A, const FFormatterNode& B)
+			{
+				UBehaviorTreeGraphNode* StateNodeA = (UBehaviorTreeGraphNode*)(A.OriginalNode);
+				UBTNode* BTNodeA = (UBTNode*)(StateNodeA->NodeInstance);
+				int32 IndexA = 0;
+				IndexA = (BTNodeA && BTNodeA->GetExecutionIndex() < 0xffff) ? BTNodeA->GetExecutionIndex() : -1;
+				UBehaviorTreeGraphNode* StateNodeB = (UBehaviorTreeGraphNode*)(B.OriginalNode);
+				UBTNode* BTNodeB = (UBTNode*)(StateNodeB->NodeInstance);
+				int32 IndexB = 0;
+				IndexB = (BTNodeB && BTNodeB->GetExecutionIndex() < 0xffff) ? BTNodeB->GetExecutionIndex() : -1;
+				return IndexA < IndexB;
+			});
+			return GraphFormatterDelegates;
+		}
+	}
 	return GraphFormatterDelegates;
 }
 
 void FFormatterHacker::ComputeLayoutAtRatioOne(FFormatterDelegates GraphDelegates, TSet<UEdGraphNode*> Nodes)
 {
 	auto GraphEditor = GraphDelegates.GetGraphEditorDelegate.Execute();
-	if(GraphEditor)
+	if (GraphEditor)
 	{
 		auto NodePanel = StaticCast<SNodePanel*>(GetGraphPanel(GraphEditor));
 		if (NodePanel)

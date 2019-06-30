@@ -27,6 +27,7 @@ class FFastAndSimplePositioningStrategy : public IPositioningStrategy
 	TMap<FFormatterNode*, float> CombinedPositionMap;
 	bool IsUpperDirection;
 	bool IsLeftDirection;
+	bool IsHorizontalDirection;
 	void Initialize();
 	void MarkConflicts();
 	void DoVerticalAlignment();
@@ -37,5 +38,5 @@ class FFastAndSimplePositioningStrategy : public IPositioningStrategy
 	void Combine();
 	void DoOnePass();
 public:
-	explicit FFastAndSimplePositioningStrategy(TArray<TArray<FFormatterNode*> >& InLayeredNodes);
+	explicit FFastAndSimplePositioningStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true);
 };

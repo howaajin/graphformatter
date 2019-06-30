@@ -195,7 +195,7 @@ bool FFormatterNode::AnySuccessorPathDepthEqu0() const
 	return false;
 }
 
-float FFormatterNode::GetLinkedPositionToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction)
+float FFormatterNode::GetLinkedPositionToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction, bool IsHorizontalDirection)
 {
 	auto& Edges = Direction == EGPD_Input ? InEdges : OutEdges;
 	float MedianPosition = 0.0f;
@@ -204,7 +204,14 @@ float FFormatterNode::GetLinkedPositionToNode(const FFormatterNode* Node, EEdGra
 	{
 		if (Edge->To->OwningNode == Node)
 		{
-			MedianPosition += Edge->From->NodeOffset.Y;
+			if (IsHorizontalDirection)
+			{
+				MedianPosition += Edge->From->NodeOffset.Y;
+			}
+			else
+			{
+				MedianPosition += Edge->From->NodeOffset.X;
+			}
 			++Count;
 		}
 	}
@@ -467,7 +474,7 @@ TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSe
 					}
 					FFormatterPin* From = OriginalPinsMap[Pin];
 					FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-					Result.Add(FFormatterEdge{ From, To });
+					Result.Add(FFormatterEdge{From, To});
 				}
 			}
 		}
@@ -485,7 +492,7 @@ TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSe
 				}
 				FFormatterPin* From = OriginalPinsMap[Pin];
 				FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-				Result.Add(FFormatterEdge{ From, To });
+				Result.Add(FFormatterEdge{From, To});
 			}
 		}
 	}
@@ -980,7 +987,15 @@ void FFormatterGraph::DoLayering()
 			}
 		}
 		Set.Append(Layer);
-		LayeredList.Add(Layer.Array());
+		TArray<FFormatterNode*> Array = Layer.Array();
+		if (Delegates.NodeComparer.IsBound())
+		{
+			Array.Sort([this](const FFormatterNode& A, const FFormatterNode& B)
+			{
+				return Delegates.NodeComparer.Execute(A, B);
+			});
+		}
+		LayeredList.Add(Array);
 	}
 }
 
@@ -1055,11 +1070,20 @@ TArray<FFormatterEdge*> FFormatterGraph::GetEdgeBetweenTwoLayer(const TArray<FFo
 	return Result;
 }
 
-TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes)
+TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection)
 {
 	TArray<FSlateRect> LayersBound;
 	const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
 	FSlateRect TotalBound;
+	FVector2D Spacing;
+	if (IsHorizontalDirection)
+	{
+		Spacing = FVector2D(Settings.HorizontalSpacing, 0);
+	}
+	else
+	{
+		Spacing = FVector2D(0, Settings.VerticalSpacing);
+	}
 	for (int32 i = 0; i < InLayeredNodes.Num(); i++)
 	{
 		const auto& Layer = InLayeredNodes[i];
@@ -1067,7 +1091,7 @@ TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatte
 		FVector2D Position;
 		if (TotalBound.IsValid())
 		{
-			Position = TotalBound.GetTopRight() + FVector2D(Settings.HorizontalSpacing, 0);
+			Position = TotalBound.GetBottomRight() + Spacing;
 		}
 		else
 		{
@@ -1143,17 +1167,25 @@ void FFormatterGraph::DoOrderingSweep()
 void FFormatterGraph::DoPositioning()
 {
 	const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+
+	if (Delegates.IsVerticalPositioning.IsBound() && Delegates.IsVerticalPositioning.Execute())
+	{
+		FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, false);
+		TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
+		return;
+	}
+
 	if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)
 	{
 		FEvenlyPlaceStrategy LeftToRightPositioningStrategy(LayeredList);
 		TotalBound = LeftToRightPositioningStrategy.GetTotalBound();
 	}
-	if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
+	else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
 	{
 		FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList);
 		TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
 	}
-	if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::ELayerSweep)
+	else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::ELayerSweep)
 	{
 		FPriorityPositioningStrategy PriorityPositioningStrategy(LayeredList);
 		TotalBound = PriorityPositioningStrategy.GetTotalBound();
@@ -1364,7 +1396,10 @@ void FFormatterGraph::Format()
 			RemoveCycle();
 			DoLayering();
 			AddDummyNodes();
-			DoOrderingSweep();
+			if (!Delegates.NodeComparer.IsBound())
+			{
+				DoOrderingSweep();
+			}
 			DoPositioning();
 		}
 	}
