@@ -302,7 +302,7 @@ FFormatterDelegates FFormatterHacker::GetDelegates(UObject* Object, IAssetEditor
 	return GraphFormatterDelegates;
 }
 
-void FFormatterHacker::ComputeLayoutAtRatioOne(FFormatterDelegates GraphDelegates, TSet<UEdGraphNode*> Nodes)
+void FFormatterHacker::ComputeNodesSizeAtRatioOne(FFormatterDelegates GraphDelegates, TSet<UEdGraphNode*> Nodes)
 {
 	auto GraphEditor = GraphDelegates.GetGraphEditorDelegate.Execute();
 	if (GraphEditor)

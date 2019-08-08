@@ -252,7 +252,7 @@ void FFormatterModule::FormatGraph(FFormatterDelegates GraphDelegates)
 	FFormatterHacker::UpdateCommentNodes(GraphEditor, Graph);
 	auto SelectedNodes = GetSelectedNodes(GraphEditor);
 	SelectedNodes = DoSelectionStrategy(Graph, SelectedNodes);
-	FFormatterHacker::ComputeLayoutAtRatioOne(GraphDelegates, SelectedNodes);
+	FFormatterHacker::ComputeNodesSizeAtRatioOne(GraphDelegates, SelectedNodes);
 	FFormatterGraph GraphData(Graph, SelectedNodes, GraphDelegates);
 	GraphData.Format();
 	FFormatterHacker::RestoreZoomLevel(GraphDelegates);
