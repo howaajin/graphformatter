@@ -133,7 +133,14 @@ void FFastAndSimplePositioningStrategy::DoHorizontalCompaction()
 		for (auto Node : Layer)
 		{
 			SinkMap.Add(Node, Node);
-			ShiftMap.Add(Node, FLT_MAX);
+			if (IsLeftDirection)
+			{
+				ShiftMap.Add(Node, FLT_MAX);
+			}
+			else
+			{
+				ShiftMap.Add(Node, -FLT_MAX);
+			}
 			XMap->Add(Node, NAN);
 		}
 	}
@@ -161,7 +168,7 @@ void FFastAndSimplePositioningStrategy::DoHorizontalCompaction()
 		{
 			auto& RootNode = RootMap[Node];
 			const float Shift = ShiftMap[SinkMap[RootNode]];
-			if (Shift < FLT_MAX)
+			if (IsLeftDirection && Shift < FLT_MAX || !IsLeftDirection&& Shift > -FLT_MAX)
 			{
 				(*XMap)[Node] = (*XMap)[Node] + Shift;
 			}
@@ -213,7 +220,7 @@ void FFastAndSimplePositioningStrategy::PlaceBlock(FFormatterNode* BlockRoot)
 				if (SinkMap[BlockRoot] != SinkMap[PrevBlockRoot])
 				{
 					float LeftShift = (*XMap)[BlockRoot] - (*XMap)[PrevBlockRoot] + InnerShiftMap[Node] - InnerShiftMap[Adjacency] - AdjacencyHeight - Spacing;
-					float RightShift = (*XMap)[PrevBlockRoot] - (*XMap)[BlockRoot] - InnerShiftMap[Node] + InnerShiftMap[Adjacency] - NodeHeight + Spacing;
+					float RightShift = (*XMap)[BlockRoot] - (*XMap)[PrevBlockRoot] - InnerShiftMap[Node] + InnerShiftMap[Adjacency] + NodeHeight + Spacing;
 					float Shift = IsLeftDirection ? FMath::Min(ShiftMap[SinkMap[PrevBlockRoot]], LeftShift) : FMath::Max(ShiftMap[SinkMap[PrevBlockRoot]], RightShift);
 					ShiftMap[SinkMap[PrevBlockRoot]] = Shift;
 				}
@@ -236,8 +243,7 @@ void FFastAndSimplePositioningStrategy::PlaceBlock(FFormatterNode* BlockRoot)
 				}
 			}
 			Node = AlignMap[Node];
-		}
-		while (Node != BlockRoot);
+		} while (Node != BlockRoot);
 	}
 }
 
@@ -276,8 +282,7 @@ void FFastAndSimplePositioningStrategy::CalculateInnerShift()
 				{
 					InnerShiftMap[CheckNode] -= Left;
 					CheckNode = AlignMap[CheckNode];
-				}
-				while (CheckNode != Node);
+				} while (CheckNode != Node);
 				BlockWidthMap.FindOrAdd(Node) = Right - Left;
 			}
 		}
@@ -311,7 +316,7 @@ void FFastAndSimplePositioningStrategy::Sweep()
 
 void FFastAndSimplePositioningStrategy::Combine()
 {
-	TArray<TMap<FFormatterNode*, float>> Layouts = {UpperLeftPositionMap, UpperRightPositionMap, LowerLeftPositionMap, LowerRightPositionMap};
+	TArray<TMap<FFormatterNode*, float>> Layouts = { UpperLeftPositionMap, UpperRightPositionMap, LowerLeftPositionMap, LowerRightPositionMap };
 	TArray<TTuple<float, float>> Bounds;
 	Bounds.SetNumUninitialized(Layouts.Num());
 	int32 MinWidthIndex = -1;
@@ -354,7 +359,7 @@ void FFastAndSimplePositioningStrategy::Combine()
 	{
 		for (auto Node : Layer)
 		{
-			TArray<float> Values = {Layouts[0][Node], Layouts[1][Node], Layouts[2][Node], Layouts[3][Node]};
+			TArray<float> Values = { Layouts[0][Node], Layouts[1][Node], Layouts[2][Node], Layouts[3][Node] };
 			Values.Sort();
 			if (!IsHorizontalDirection)
 			{
