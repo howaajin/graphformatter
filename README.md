@@ -16,3 +16,12 @@ Select nodes you want to arrange, or just deselect all nodes and press "Format G
 
 Configure it in "Editor Preferences/Plugins/Graph Formatter".
 
+#### Technical Details
+
+It is based on the ideas of [Layered graph drawing](https://en.wikipedia.org/wiki/Layered_graph_drawing).
+
+References:
+
+[Fast and Simple Horizontal Coordinate Assignment](https://link.springer.com/chapter/10.1007/3-540-45848-4_3).
+
+[Size- and Port-Aware Horizontal Node Coordinate Assignment](https://link.springer.com/chapter/10.1007/978-3-319-27261-0_12).
