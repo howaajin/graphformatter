@@ -21,6 +21,7 @@
 #include "ScopedTransaction.h"
 #include "EdGraphNode_Comment.h"
 #include "FormatterGraph.h"
+#include "Framework/MultiBox/MultiBoxDefs.h"
 
 #define LOCTEXT_NAMESPACE "GraphFormatter"
 
@@ -189,9 +190,8 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
 			TAttribute<FSlateIcon>(FSlateIcon(FFormatterStyle::Get()->GetStyleSetName(), "GraphFormatter.ApplyIcon")),
 			FName(TEXT("GraphFormatter"))
 		);
-		auto EditArea = SNew(SVerticalBox)
-			+ SVerticalBox::Slot()
-			.AutoHeight()
+		auto HorizontalEditArea = SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
 			.Padding(2.0f)
 			[
 				SNew(SSpinBox<int32>)
@@ -202,6 +202,7 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
 				.ToolTipText(LOCTEXT("GraphFormatterHorizontalSpacingiToolTips", "Spacing between two layers."))
 				.Value(Settings->HorizontalSpacing)
 				.MinDesiredWidth(80)
+				.Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Visible : EVisibility::Collapsed; })
 				.OnValueCommitted_Lambda([MutableSettings](int32 Number, ETextCommit::Type CommitInfo)
 				{
 					MutableSettings->HorizontalSpacing = Number;
@@ -209,11 +210,11 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
 					MutableSettings->SaveConfig();
 				})
 			]
-			+ SVerticalBox::Slot()
-			.AutoHeight()
+			+ SHorizontalBox::Slot()
 			.Padding(2.0f)
 			[
 				SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm> >)
+				.Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Visible : EVisibility::Collapsed; })
 				.ContentPadding(FMargin(6.0f, 2.0f))
 				.OptionsSource(&AlgorithmOptions)
 				.ToolTipText_Lambda([]() { return FText::FromString("Positioning Algorithm"); })
@@ -236,7 +237,55 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
 					.Text_Lambda([Settings]() { return GetEnumAsString(Settings->PositioningAlgorithm); })
 				]
 			];
-		ToolbarBuilder.AddWidget(EditArea);
+			auto VerticalEditArea = SNew(SVerticalBox)
+			+ SVerticalBox::Slot()
+			.Padding(2.0f)
+			[
+				SNew(SSpinBox<int32>)
+				.Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Collapsed : EVisibility::Visible; })
+				.MinValue(0)
+				.MaxValue(1000)
+				.MinSliderValue(0)
+				.MaxSliderValue(1000)
+				.ToolTipText(LOCTEXT("GraphFormatterHorizontalSpacingiToolTips", "Spacing between two layers."))
+				.Value(Settings->HorizontalSpacing)
+				.MinDesiredWidth(80)
+				.OnValueCommitted_Lambda([MutableSettings](int32 Number, ETextCommit::Type CommitInfo)
+				{
+					MutableSettings->HorizontalSpacing = Number;
+					MutableSettings->PostEditChange();
+					MutableSettings->SaveConfig();
+				})
+			]
+			+ SVerticalBox::Slot()
+			.Padding(2.0f)
+			[
+				SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm> >)
+				.Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Collapsed : EVisibility::Visible; })
+				.ContentPadding(FMargin(6.0f, 2.0f))
+				.OptionsSource(&AlgorithmOptions)
+				.ToolTipText_Lambda([]() { return FText::FromString("Positioning Algorithm"); })
+				.InitiallySelectedItem(AlgorithmOptions[SelectedAlgorithmIndex])
+				.OnSelectionChanged_Lambda([=](TSharedPtr<EGraphFormatterPositioningAlgorithm> NewOption, ESelectInfo::Type SelectInfo)
+				{
+					if (SelectInfo != ESelectInfo::Direct)
+					{
+						MutableSettings->PositioningAlgorithm = *NewOption;
+						MutableSettings->PostEditChange();
+						MutableSettings->SaveConfig();
+					}
+				})
+				.OnGenerateWidget_Lambda([](TSharedPtr<EGraphFormatterPositioningAlgorithm> AlgorithmEnum)
+				{
+					return SNew( STextBlock ).Text(GetEnumAsString(*AlgorithmEnum.Get()));
+				})
+				[
+					SNew( STextBlock )
+					.Text_Lambda([Settings]() { return GetEnumAsString(Settings->PositioningAlgorithm); })
+				]
+			];
+		ToolbarBuilder.AddWidget(HorizontalEditArea);
+		ToolbarBuilder.AddWidget(VerticalEditArea);
 	}
 	ToolbarBuilder.EndSection();
 }
