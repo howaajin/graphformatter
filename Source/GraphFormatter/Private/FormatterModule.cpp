@@ -22,6 +22,7 @@
 #include "EdGraphNode_Comment.h"
 #include "FormatterGraph.h"
 #include "Framework/MultiBox/MultiBoxDefs.h"
+#include "GraphEditorSettings.h"
 
 #define LOCTEXT_NAMESPACE "GraphFormatter"
 
@@ -32,6 +33,8 @@ class FFormatterModule : public IGraphFormatterModule
 	void HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance);
 	void FillToolbar(FToolBarBuilder& ToolbarBuilder);
 	void FormatGraph(FFormatterDelegates GraphDelegates);
+	void ToggleStraightenConnections();
+	bool IsStraightenConnectionsEnabled();
 	FDelegateHandle GraphEditorDelegateHandle;
 	TArray<TSharedPtr<EGraphFormatterPositioningAlgorithm> > AlgorithmOptions;
 };
@@ -139,8 +142,7 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
 		}
 		ToolkitCommands->MapAction(Commands.FormatGraph,
 		                           FExecuteAction::CreateRaw(this, &FFormatterModule::FormatGraph, GraphDelegates),
-		                           FCanExecuteAction::CreateLambda([]()-> bool { return true; })
-		);
+		                           FCanExecuteAction());
 		TSharedPtr<FExtender> Extender = FAssetEditorToolkit::GetSharedToolBarExtensibilityManager()->GetAllExtenders();
 		assetEditorToolkit->AddToolbarExtender(Extender);
 		Extender->AddToolBarExtension(
@@ -149,6 +151,13 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
 			ToolkitCommands,
 			FToolBarExtensionDelegate::CreateRaw(this, &FFormatterModule::FillToolbar)
 		);
+		if (!ToolkitCommands->IsActionMapped(Commands.StraightenConnections))
+		{
+			ToolkitCommands->MapAction(Commands.StraightenConnections,
+				FExecuteAction::CreateRaw(this, &FFormatterModule::ToggleStraightenConnections),
+				FCanExecuteAction(),
+				FIsActionChecked::CreateRaw(this, &FFormatterModule::IsStraightenConnectionsEnabled));
+		}
 	}
 }
 
@@ -286,6 +295,15 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
 			];
 		ToolbarBuilder.AddWidget(HorizontalEditArea);
 		ToolbarBuilder.AddWidget(VerticalEditArea);
+		ToolbarBuilder.AddToolBarButton
+		(
+			Commands.StraightenConnections,
+			NAME_None,
+			TAttribute<FText>(),
+			TAttribute<FText>(),
+			TAttribute<FSlateIcon>(FSlateIcon(FFormatterStyle::Get()->GetStyleSetName(), "GraphFormatter.StraightenIcon")),
+			FName(TEXT("GraphFormatter"))
+		);
 	}
 	ToolbarBuilder.EndSection();
 }
@@ -323,6 +341,51 @@ void FFormatterModule::FormatGraph(FFormatterDelegates GraphDelegates)
 	}
 	Graph->NotifyGraphChanged();
 	GraphDelegates.MarkGraphDirty.ExecuteIfBound();
+}
+
+void FFormatterModule::ToggleStraightenConnections()
+{
+	auto GraphEditorSettings = GetMutableDefault<UGraphEditorSettings>();
+
+	if(IsStraightenConnectionsEnabled())
+	{
+		const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+		GraphEditorSettings->ForwardSplineTangentFromHorizontalDelta = Settings->ForwardSplineTangentFromHorizontalDelta;
+		GraphEditorSettings->ForwardSplineTangentFromVerticalDelta= Settings->ForwardSplineTangentFromVerticalDelta;
+		GraphEditorSettings->BackwardSplineTangentFromHorizontalDelta= Settings->BackwardSplineTangentFromHorizontalDelta;
+		GraphEditorSettings->BackwardSplineTangentFromVerticalDelta = Settings->BackwardSplineTangentFromVerticalDelta;
+		GraphEditorSettings->PostEditChange();
+		GraphEditorSettings->SaveConfig();
+	}
+	else
+	{
+		UFormatterSettings* Settings = GetMutableDefault<UFormatterSettings>();
+		Settings->ForwardSplineTangentFromHorizontalDelta = GraphEditorSettings->ForwardSplineTangentFromHorizontalDelta;
+		Settings->ForwardSplineTangentFromVerticalDelta = GraphEditorSettings->ForwardSplineTangentFromVerticalDelta;
+		Settings->BackwardSplineTangentFromHorizontalDelta = GraphEditorSettings->BackwardSplineTangentFromHorizontalDelta;
+		Settings->BackwardSplineTangentFromVerticalDelta = GraphEditorSettings->BackwardSplineTangentFromVerticalDelta;
+		Settings->PostEditChange();
+		Settings->SaveConfig();
+		GraphEditorSettings->ForwardSplineTangentFromHorizontalDelta = FVector2D(0,0);
+		GraphEditorSettings->ForwardSplineTangentFromVerticalDelta= FVector2D(0,0);
+		GraphEditorSettings->BackwardSplineTangentFromHorizontalDelta= FVector2D(0,0);
+		GraphEditorSettings->BackwardSplineTangentFromVerticalDelta = FVector2D(0,0);
+		GraphEditorSettings->PostEditChange();
+		GraphEditorSettings->SaveConfig();
+	}
+}
+
+bool FFormatterModule::IsStraightenConnectionsEnabled()
+{
+	auto GraphEditorSettings = GetDefault<UGraphEditorSettings>();
+	if (GraphEditorSettings->ForwardSplineTangentFromHorizontalDelta == FVector2D(0, 0) &&
+		GraphEditorSettings->ForwardSplineTangentFromVerticalDelta== FVector2D(0, 0) &&
+		GraphEditorSettings->BackwardSplineTangentFromHorizontalDelta == FVector2D(0, 0) &&
+		GraphEditorSettings->BackwardSplineTangentFromVerticalDelta == FVector2D(0, 0))
+	{
+		return true;
+	}
+	return false;
 }
 
 void FFormatterModule::ShutdownModule()

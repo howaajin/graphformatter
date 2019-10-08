@@ -44,4 +44,14 @@ public:
 	/** Vertex ordering max iterations */
 	UPROPERTY(config, EditAnywhere, Category = "Performance", meta = (ClampMin = 0, ClampMax = 100))
 	int32 MaxOrderingIterations;
+
+	/** Straight connections old settings */
+	UPROPERTY(config, BlueprintReadWrite)
+	FVector2D ForwardSplineTangentFromHorizontalDelta;
+	UPROPERTY(config, BlueprintReadWrite)
+	FVector2D ForwardSplineTangentFromVerticalDelta;
+	UPROPERTY(config, BlueprintReadWrite)
+	FVector2D BackwardSplineTangentFromHorizontalDelta;
+	UPROPERTY(config, BlueprintReadWrite)
+	FVector2D BackwardSplineTangentFromVerticalDelta;
 };

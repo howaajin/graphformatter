@@ -17,5 +17,6 @@ public:
 	{
 	}
 	TSharedPtr<FUICommandInfo> FormatGraph;
+	TSharedPtr<FUICommandInfo> StraightenConnections;
 	void RegisterCommands() override;
 };

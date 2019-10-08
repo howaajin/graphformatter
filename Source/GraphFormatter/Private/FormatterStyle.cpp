@@ -15,6 +15,8 @@ void FFormatterStyle::Initialize()
 		StyleSet->SetContentRoot(FPaths::EngineContentDir() / TEXT("Editor/Slate/Icons"));
 		StyleSet->Set("GraphFormatter.ApplyIcon.Small", new FSlateImageBrush(StyleSet->RootToContentDir(TEXT("Profiler/profiler_Calls_32x"), TEXT(".png")), FVector2D(16.0f, 16.0f)));
 		StyleSet->Set("GraphFormatter.ApplyIcon", new FSlateImageBrush(StyleSet->RootToContentDir(TEXT("Profiler/profiler_Calls_32x"), TEXT(".png")), FVector2D(32.0f, 32.0f)));
+		StyleSet->Set("GraphFormatter.StraightenIcon.Small", new FSlateImageBrush(StyleSet->RootToContentDir(TEXT("icon_CurveEditor_Straighten_40x"), TEXT(".png")), FVector2D(16.0f, 16.0f)));
+		StyleSet->Set("GraphFormatter.StraightenIcon", new FSlateImageBrush(StyleSet->RootToContentDir(TEXT("icon_CurveEditor_Straighten_40x"), TEXT(".png")), FVector2D(32.0f, 32.0f)));
 		FSlateStyleRegistry::RegisterSlateStyle(*StyleSet.Get());
 	}
 }
