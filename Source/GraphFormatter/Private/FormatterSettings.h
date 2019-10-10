@@ -46,12 +46,12 @@ public:
 	int32 MaxOrderingIterations;
 
 	/** Straight connections old settings */
-	UPROPERTY(config, BlueprintReadWrite)
+	UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
 	FVector2D ForwardSplineTangentFromHorizontalDelta;
-	UPROPERTY(config, BlueprintReadWrite)
+	UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
 	FVector2D ForwardSplineTangentFromVerticalDelta;
-	UPROPERTY(config, BlueprintReadWrite)
+	UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
 	FVector2D BackwardSplineTangentFromHorizontalDelta;
-	UPROPERTY(config, BlueprintReadWrite)
+	UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
 	FVector2D BackwardSplineTangentFromVerticalDelta;
 };
