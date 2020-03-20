@@ -399,7 +399,14 @@ void FFormatterModule::ShutdownModule()
 	{
 		SettingsModule->UnregisterSettings("Editor", "Plugins", "GraphFormatter");
 	}
+#if ENGINE_MINOR_VERSION >= 24
+	if(GEditor)
+	{
+		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().Remove(GraphEditorDelegateHandle);
+	}
+#else
 	FAssetEditorManager::Get().OnAssetOpenedInEditor().Remove(GraphEditorDelegateHandle);
+#endif
 	FFormatterStyle::Shutdown();
 }
 
