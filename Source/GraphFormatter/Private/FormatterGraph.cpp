@@ -530,6 +530,7 @@ TArray<FFormatterNode*> FFormatterGraph::GetNodesGreaterThan(int32 i, TSet<FForm
 
 void FFormatterGraph::BuildNodes(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes)
 {
+	// Collapse all comment nodes into virtual nodes.
 	TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(InGraph, SelectedNodes);
 	for (int32 i = SortedCommentNodes.Num() - 1; i != -1; --i)
 	{
@@ -538,10 +539,11 @@ void FFormatterGraph::BuildNodes(UEdGraph* InGraph, TSet<UEdGraphNode*> Selected
 		{
 			continue;
 		}
-		FFormatterNode* NodeData = CollapseNode(CommentNode, SelectedNodes);
+		FFormatterNode* NodeData = CollapseCommentNode(CommentNode, SelectedNodes);
 		AddNode(NodeData);
 		PickedNodes.Add(CommentNode);
 	}
+
 	for (auto Node : InGraph->Nodes)
 	{
 		if (!SelectedNodes.Contains(Node) || PickedNodes.Contains(Node))
@@ -585,6 +587,24 @@ TArray<UEdGraphNode_Comment*> FFormatterGraph::GetSortedCommentNodes(UEdGraph* I
 	{
 		return A.CommentDepth > B.CommentDepth;
 	});
+	return CommentNodes;
+}
+
+TArray<UEdGraphNode_Comment*> FFormatterGraph::GetSortedCommentNodes(UEdGraph* InGraph)
+{
+	TArray<UEdGraphNode_Comment*> CommentNodes;
+	for (auto Node : InGraph->Nodes)
+	{
+		if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
+		{
+			auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
+			CommentNodes.Add(CommentNode);
+		}
+	}
+	CommentNodes.Sort([](const UEdGraphNode_Comment& A, const UEdGraphNode_Comment& B)
+		{
+			return A.CommentDepth > B.CommentDepth;
+		});
 	return CommentNodes;
 }
 
@@ -637,21 +657,21 @@ TSet<UEdGraphNode*> FFormatterGraph::GetChildren(const UEdGraphNode* InNode) con
 	return SubSelectedNodes;
 }
 
-FFormatterGraph* FFormatterGraph::BuildSubGraph(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes)
+FFormatterGraph* FFormatterGraph::BuildSubGraph(TSet<UEdGraphNode*> SelectedNodes) const
 {
-	TSet<UEdGraphNode*> SubSelectedNodes = PickChildren(InNode, SelectedNodes);
-	if (SubSelectedNodes.Num() > 0)
+	if (SelectedNodes.Num() > 0)
 	{
-		FFormatterGraph* SubGraph = new FFormatterGraph(UEGraph, SubSelectedNodes, Delegates);
+		FFormatterGraph* SubGraph = new FFormatterGraph(UEGraph, SelectedNodes, Delegates);
 		return SubGraph;
 	}
 	return nullptr;
 }
 
-FFormatterNode* FFormatterGraph::CollapseNode(UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes)
+FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes)
 {
-	FFormatterNode* Node = new FFormatterNode(InNode);
-	FFormatterGraph* SubGraph = BuildSubGraph(InNode, SelectedNodes);
+	FFormatterNode* Node = new FFormatterNode(CommentNode);
+	const TSet<UEdGraphNode*> SubSelectedNodes = PickChildren(CommentNode, SelectedNodes);
+	FFormatterGraph* SubGraph = BuildSubGraph(SubSelectedNodes);
 	if (SubGraph != nullptr)
 	{
 		Node->SetSubGraph(SubGraph);

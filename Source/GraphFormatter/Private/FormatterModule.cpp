@@ -78,16 +78,6 @@ static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
 		if (GraphNode)
 		{
 			SelectedGraphNodes.Add(GraphNode);
-			if (GraphNode->IsA(UEdGraphNode_Comment::StaticClass()))
-			{
-				UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(Node);
-				auto NodesInComment = CommentNode->GetNodesUnderComment();
-				for (UObject* ObjectInComment : NodesInComment)
-				{
-					UEdGraphNode* NodeInComment = Cast<UEdGraphNode>(ObjectInComment);
-					SelectedGraphNodes.Add(NodeInComment);
-				}
-			}
 		}
 	}
 	return SelectedGraphNodes;
@@ -109,26 +99,146 @@ static TSet<UEdGraphNode*> GetNodesUnderComment(const UEdGraphNode* InNode)
 	return SubSelectedNodes;
 }
 
+// Return a map that map node to the comment node that contains it
+static TMap<UEdGraphNode*, UEdGraphNode*> BuildCommentTree(UEdGraph* Graph)
+{
+	TMap<UEdGraphNode*, UEdGraphNode*> Map;
+
+	auto SortedCommentNodes = FFormatterGraph::GetSortedCommentNodes(Graph);
+	for (int i = SortedCommentNodes.Num() - 1; i != -1; i--)
+	{
+		const auto CommentNode = SortedCommentNodes[i];
+		auto SubNodes = GetNodesUnderComment(CommentNode);
+		for (auto SubNode : SubNodes)
+		{
+			if (!Map.Contains(SubNode))
+			{
+				Map.Add(SubNode, CommentNode);
+			}
+		}
+	}
+
+	return Map;
+}
+
+// If Node is under comment node, select all node in that comment node.
+static TSet<UEdGraphNode*> GetAllNodesInSameComment(const TMap<UEdGraphNode*, UEdGraphNode*>& CommentTree, UEdGraphNode* Node)
+{
+	while (CommentTree.Contains(Node))
+	{
+		Node = CommentTree[Node];
+	}
+	if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
+	{
+		TSet<UEdGraphNode*> Result = GetNodesUnderComment(Node);
+		Result.Add(Node);
+		return Result;
+	}
+	return TSet<UEdGraphNode*>();
+}
+
+static  TSet<UEdGraphNode*> FindDirectPredecessors(UEdGraph* Graph, TSet<UEdGraphNode*>Nodes)
+{
+	auto CommentTree = BuildCommentTree(Graph);
+	TArray<UEdGraphNode*> Stack = Nodes.Array();
+	TSet<UEdGraphNode*> Checked;
+	while (Stack.Num() != 0)
+	{
+		UEdGraphNode* Node = Stack.Pop();
+
+		auto NodesInSameComment = GetAllNodesInSameComment(CommentTree, Node);
+		for (auto NodeUnderComment : NodesInSameComment)
+		{
+			if (!Nodes.Contains(NodeUnderComment))
+			{
+				Stack.Add(NodeUnderComment);
+			}
+		}
+
+		for (auto Pin : Node->Pins)
+		{
+			if (Pin->Direction == EGPD_Input)
+			{
+				for (auto LinkedToPin : Pin->LinkedTo)
+				{
+					auto LinkedToNode = LinkedToPin->GetOwningNodeUnchecked();
+					if (!Checked.Contains(LinkedToNode) && !Nodes.Contains(LinkedToNode))
+					{
+						Checked.Add(LinkedToNode);
+					}
+				}
+			}
+		}
+	}
+	return Checked;
+}
+
+// Collect all successors, treat nodes in the same comment as connected
+static TSet<UEdGraphNode*> FindAllSuccessors(UEdGraph* Graph, TSet<UEdGraphNode*> Nodes)
+{
+	auto CommentTree = BuildCommentTree(Graph);
+
+	TArray<UEdGraphNode*> Stack = Nodes.Array();
+	TSet<UEdGraphNode*> Checked = Nodes;
+	TSet<UEdGraphNode*> DirectPredecessors = FindDirectPredecessors(Graph, Nodes);
+
+	while (Stack.Num() != 0)
+	{
+		UEdGraphNode* Node = Stack.Pop();
+
+		auto NodesInSameComment = GetAllNodesInSameComment(CommentTree, Node);
+		for (auto NodeUnderComment : NodesInSameComment)
+		{
+			if (!Checked.Contains(NodeUnderComment))
+			{
+				Checked.Add(NodeUnderComment);
+				Stack.Add(NodeUnderComment);
+			}
+		}
+
+		for (auto Pin : Node->Pins)
+		{
+			for (auto LinkedToPin : Pin->LinkedTo)
+			{
+				auto LinkedToNode = LinkedToPin->GetOwningNodeUnchecked();
+				if (!Checked.Contains(LinkedToNode) && !DirectPredecessors.Contains(LinkedToNode))
+				{
+					Stack.Add(LinkedToNode);
+					Checked.Add(LinkedToNode);
+				}
+			}
+		}
+	}
+	return Checked;
+}
+
 static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNode*> Selected)
 {
 	if (Selected.Num() != 0)
 	{
-		return Selected;
+		//return FindAllSuccessors(Graph, Selected);
+		TSet<UEdGraphNode*> SelectedGraphNodes;
+		for (UEdGraphNode* GraphNode : Selected)
+		{
+			SelectedGraphNodes.Add(GraphNode);
+			if (GraphNode->IsA(UEdGraphNode_Comment::StaticClass()))
+			{
+				UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(GraphNode);
+				auto NodesInComment = CommentNode->GetNodesUnderComment();
+				for (UObject* ObjectInComment : NodesInComment)
+				{
+					UEdGraphNode* NodeInComment = Cast<UEdGraphNode>(ObjectInComment);
+					SelectedGraphNodes.Add(NodeInComment);
+				}
+			}
+		}
+		return SelectedGraphNodes;
 	}
 	TSet<UEdGraphNode*> SelectedGraphNodes;
 	for (UEdGraphNode* Node : Graph->Nodes)
 	{
 		SelectedGraphNodes.Add(Node);
 	}
-	TSet<UEdGraphNode*> NodesUnderComment;
-	for (auto SelectedNode : SelectedGraphNodes)
-	{
-		if (SelectedNode->IsA(UEdGraphNode_Comment::StaticClass()))
-		{
-			NodesUnderComment.Append(GetNodesUnderComment(SelectedNode));
-		}
-	}
-	SelectedGraphNodes.Append(NodesUnderComment);
 	return SelectedGraphNodes;
 }
 
@@ -399,7 +509,14 @@ void FFormatterModule::ShutdownModule()
 	{
 		SettingsModule->UnregisterSettings("Editor", "Plugins", "GraphFormatter");
 	}
+#if ENGINE_MINOR_VERSION >= 24
+	if (GEditor)
+	{
+		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().Remove(GraphEditorDelegateHandle);
+	}
+#else
 	FAssetEditorManager::Get().OnAssetOpenedInEditor().Remove(GraphEditorDelegateHandle);
+#endif
 	FFormatterStyle::Shutdown();
 }
 
