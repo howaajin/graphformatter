@@ -139,7 +139,6 @@ private:
 	TArray<FFormatterNode*> GetLeavesWidthPathDepthEqu0() const;
 	int32 CalculateLongestPath() const;
 
-	UEdGraph* UEGraph;
 	FFormatterDelegates Delegates;
 	TArray<FFormatterNode*> Nodes;
 	TMap<FGuid, FFormatterNode*> NodesMap;

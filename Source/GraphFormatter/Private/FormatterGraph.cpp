@@ -769,7 +769,6 @@ FFormatterGraph::FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes, FForm
 
 FFormatterGraph::FFormatterGraph(const FFormatterGraph& Other)
 {
-	UEGraph = Other.UEGraph;
 	Delegates = Other.Delegates;
 	for (auto Node : Other.Nodes)
 	{
