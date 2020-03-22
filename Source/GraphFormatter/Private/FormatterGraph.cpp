@@ -528,31 +528,52 @@ TArray<FFormatterNode*> FFormatterGraph::GetNodesGreaterThan(int32 i, TSet<FForm
 	return Result;
 }
 
-void FFormatterGraph::BuildNodes(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes)
+static TSet<UEdGraphNode*> GetNodesUnderComment(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes)
 {
-	// Collapse all comment nodes into virtual nodes.
-	TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(InGraph, SelectedNodes);
-	for (int32 i = SortedCommentNodes.Num() - 1; i != -1; --i)
+	const UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(InNode);
+	auto ObjectsUnderComment = CommentNode->GetNodesUnderComment();
+	TSet<UEdGraphNode*> NodesUnderComment;
+	for (auto Object : ObjectsUnderComment)
 	{
-		UEdGraphNode_Comment* CommentNode = SortedCommentNodes[i];
-		if (PickedNodes.Contains(CommentNode))
+		UEdGraphNode* Node = Cast<UEdGraphNode>(Object);
+		if (Node != nullptr && SelectedNodes.Contains(Node))
 		{
-			continue;
+			NodesUnderComment.Add(Node);
 		}
-		FFormatterNode* NodeData = CollapseCommentNode(CommentNode, SelectedNodes);
-		AddNode(NodeData);
-		PickedNodes.Add(CommentNode);
+	}
+	return NodesUnderComment;
+}
+
+void FFormatterGraph::BuildNodes(TSet<UEdGraphNode*> SelectedNodes)
+{
+	TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(SelectedNodes);
+	if (SortedCommentNodes.Num() != 0)
+	{
+		// Topmost comment node has smallest negative depth value
+		const int32 Depth = SortedCommentNodes[0]->CommentDepth;
+
+		// Collapse all topmost comment nodes into virtual nodes.
+		for (auto CommentNode : SortedCommentNodes)
+		{
+			if (CommentNode->CommentDepth == Depth)
+			{
+				auto NodesUnderComment = GetNodesUnderComment(CommentNode, SelectedNodes);
+				SelectedNodes = SelectedNodes.Difference(NodesUnderComment);
+				FFormatterNode* CollapsedNode = CollapseCommentNode(CommentNode, NodesUnderComment);
+				AddNode(CollapsedNode);
+				SelectedNodes.Remove(CommentNode);
+			}
+			else
+			{
+				break;
+			}
+		}
 	}
 
-	for (auto Node : InGraph->Nodes)
+	for (auto Node : SelectedNodes)
 	{
-		if (!SelectedNodes.Contains(Node) || PickedNodes.Contains(Node))
-		{
-			continue;
-		}
 		FFormatterNode* NodeData = new FFormatterNode(Node);
 		AddNode(NodeData);
-		PickedNodes.Add(Node);
 	}
 }
 
@@ -568,15 +589,11 @@ void FFormatterGraph::BuildEdges(TSet<UEdGraphNode*> SelectedNodes)
 	}
 }
 
-TArray<UEdGraphNode_Comment*> FFormatterGraph::GetSortedCommentNodes(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes)
+TArray<UEdGraphNode_Comment*> FFormatterGraph::GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes)
 {
 	TArray<UEdGraphNode_Comment*> CommentNodes;
-	for (auto Node : InGraph->Nodes)
+	for (auto Node : SelectedNodes)
 	{
-		if (!SelectedNodes.Contains(Node))
-		{
-			continue;
-		}
 		if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
 		{
 			auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
@@ -585,95 +602,17 @@ TArray<UEdGraphNode_Comment*> FFormatterGraph::GetSortedCommentNodes(UEdGraph* I
 	}
 	CommentNodes.Sort([](const UEdGraphNode_Comment& A, const UEdGraphNode_Comment& B)
 	{
-		return A.CommentDepth > B.CommentDepth;
+		return A.CommentDepth < B.CommentDepth;
 	});
 	return CommentNodes;
 }
 
-TArray<UEdGraphNode_Comment*> FFormatterGraph::GetSortedCommentNodes(UEdGraph* InGraph)
-{
-	TArray<UEdGraphNode_Comment*> CommentNodes;
-	for (auto Node : InGraph->Nodes)
-	{
-		if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
-		{
-			auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
-			CommentNodes.Add(CommentNode);
-		}
-	}
-	CommentNodes.Sort([](const UEdGraphNode_Comment& A, const UEdGraphNode_Comment& B)
-		{
-			return A.CommentDepth > B.CommentDepth;
-		});
-	return CommentNodes;
-}
-
-TSet<UEdGraphNode*> FFormatterGraph::GetChildren(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes) const
-{
-	const UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(InNode);
-	auto ObjectsUnderComment = CommentNode->GetNodesUnderComment();
-	TSet<UEdGraphNode*> SubSelectedNodes;
-	for (auto Object : ObjectsUnderComment)
-	{
-		UEdGraphNode* Node = Cast<UEdGraphNode>(Object);
-		if (Node != nullptr && SelectedNodes.Contains(Node))
-		{
-			SubSelectedNodes.Add(Node);
-		}
-	}
-	return SubSelectedNodes;
-}
-
-TSet<UEdGraphNode*> FFormatterGraph::PickChildren(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes)
-{
-	const UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(InNode);
-	auto ObjectsUnderComment = CommentNode->GetNodesUnderComment();
-	TSet<UEdGraphNode*> SubSelectedNodes;
-	for (auto Object : ObjectsUnderComment)
-	{
-		UEdGraphNode* Node = Cast<UEdGraphNode>(Object);
-		if (Node != nullptr && SelectedNodes.Contains(Node) && !PickedNodes.Contains(Node))
-		{
-			SubSelectedNodes.Add(Node);
-			PickedNodes.Add(Node);
-		}
-	}
-	return SubSelectedNodes;
-}
-
-TSet<UEdGraphNode*> FFormatterGraph::GetChildren(const UEdGraphNode* InNode) const
-{
-	const UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(InNode);
-	auto ObjectsUnderComment = CommentNode->GetNodesUnderComment();
-	TSet<UEdGraphNode*> SubSelectedNodes;
-	for (auto Object : ObjectsUnderComment)
-	{
-		UEdGraphNode* Node = Cast<UEdGraphNode>(Object);
-		if (Node != nullptr)
-		{
-			SubSelectedNodes.Add(Node);
-		}
-	}
-	return SubSelectedNodes;
-}
-
-FFormatterGraph* FFormatterGraph::BuildSubGraph(TSet<UEdGraphNode*> SelectedNodes) const
-{
-	if (SelectedNodes.Num() > 0)
-	{
-		FFormatterGraph* SubGraph = new FFormatterGraph(UEGraph, SelectedNodes, Delegates);
-		return SubGraph;
-	}
-	return nullptr;
-}
-
-FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes)
+FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes) const
 {
 	FFormatterNode* Node = new FFormatterNode(CommentNode);
-	const TSet<UEdGraphNode*> SubSelectedNodes = PickChildren(CommentNode, SelectedNodes);
-	FFormatterGraph* SubGraph = BuildSubGraph(SubSelectedNodes);
-	if (SubGraph != nullptr)
+	if (SelectedNodes.Num() > 0)
 	{
+		FFormatterGraph* SubGraph = new FFormatterGraph(SelectedNodes, Delegates);
 		Node->SetSubGraph(SubGraph);
 	}
 	return Node;
@@ -798,9 +737,9 @@ FFormatterNode* FFormatterGraph::FindMedianNode() const
 	return Result;
 }
 
-void FFormatterGraph::BuildNodesAndEdges(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes)
+void FFormatterGraph::BuildNodesAndEdges(TSet<UEdGraphNode*> SelectedNodes)
 {
-	BuildNodes(InGraph, SelectedNodes);
+	BuildNodes(SelectedNodes);
 	BuildEdges(SelectedNodes);
 	Nodes.Sort([](const FFormatterNode& A, const FFormatterNode& B)
 	{
@@ -808,30 +747,24 @@ void FFormatterGraph::BuildNodesAndEdges(UEdGraph* InGraph, TSet<UEdGraphNode*> 
 	});
 }
 
-FFormatterGraph::FFormatterGraph(UEdGraph* InGraph, const TSet<UEdGraphNode*>& SelectedNodes, FFormatterDelegates InDelegates, bool IsSingleMode)
+void FFormatterGraph::BuildIsolated()
 {
-	UEGraph = InGraph;
+	auto FoundIsolatedGraphs = FindIsolated();
+	if (FoundIsolatedGraphs.Num() > 1)
+	{
+		for (const auto& IsolatedNodes : FoundIsolatedGraphs)
+		{
+			auto NewGraph = new FFormatterGraph(IsolatedNodes, Delegates);
+			IsolatedGraphs.Add(NewGraph);
+		}
+	}
+}
+
+FFormatterGraph::FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes, FFormatterDelegates InDelegates)
+{
 	Delegates = InDelegates;
-	if (IsSingleMode)
-	{
-		BuildNodesAndEdges(InGraph, SelectedNodes);
-	}
-	else
-	{
-		auto FoundIsolatedGraphs = FindIsolated(InGraph, SelectedNodes);
-		if (FoundIsolatedGraphs.Num() > 1)
-		{
-			for (const auto& IsolatedNodes : FoundIsolatedGraphs)
-			{
-				auto NewGraph = new FFormatterGraph(InGraph, IsolatedNodes, InDelegates);
-				IsolatedGraphs.Add(NewGraph);
-			}
-		}
-		else if (FoundIsolatedGraphs.Num() == 1)
-		{
-			BuildNodesAndEdges(InGraph, FoundIsolatedGraphs[0]);
-		}
-	}
+	BuildNodesAndEdges(SelectedNodes);
+	BuildIsolated();
 }
 
 FFormatterGraph::FFormatterGraph(const FFormatterGraph& Other)
@@ -876,13 +809,12 @@ FFormatterGraph::~FFormatterGraph()
 	}
 }
 
-TArray<TSet<UEdGraphNode*>> FFormatterGraph::FindIsolated(UEdGraph* InGraph, const TSet<UEdGraphNode*>& SelectedNodes)
+TArray<TSet<UEdGraphNode*>> FFormatterGraph::FindIsolated()
 {
 	TArray<TSet<UEdGraphNode*>> Result;
 	TSet<FFormatterNode*> CheckedNodes;
 	TArray<FFormatterNode*> Stack;
-	auto TempGraph = FFormatterGraph(InGraph, SelectedNodes, FFormatterDelegates(), true);
-	for (auto Node : TempGraph.Nodes)
+	for (auto Node : Nodes)
 	{
 		if (!CheckedNodes.Contains(Node))
 		{
@@ -1076,7 +1008,8 @@ void FFormatterGraph::SortInLayer(TArray<TArray<FFormatterNode*>>& Order, EEdGra
 	}
 }
 
-TArray<FFormatterEdge*> FFormatterGraph::GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode)
+TArray<FFormatterEdge*> FFormatterGraph::GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer,
+                                                                const FFormatterNode* ExcludedNode)
 {
 	TArray<FFormatterEdge*> Result;
 	for (auto Node : LowerLayer)
@@ -1200,7 +1133,8 @@ void FFormatterGraph::DoPositioning()
 		FEvenlyPlaceStrategy LeftToRightPositioningStrategy(LayeredList);
 		TotalBound = LeftToRightPositioningStrategy.GetTotalBound();
 	}
-	else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
+	else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || Settings.PositioningAlgorithm ==
+		EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
 	{
 		FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList);
 		TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();

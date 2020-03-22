@@ -90,7 +90,8 @@ private:
 class FFormatterGraph
 {
 public:
-	FFormatterGraph(UEdGraph* InGraph, const TSet<UEdGraphNode*>&, FFormatterDelegates InDelegates, bool IsSingleMode = false);
+	void BuildIsolated();
+	FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes, FFormatterDelegates InDelegates);
 	FFormatterGraph(const FFormatterGraph& Other);
 	~FFormatterGraph();
 	void AddNode(FFormatterNode* InNode);
@@ -112,19 +113,18 @@ public:
 	static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true);
 	static void CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order);
 	static void CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer);
-	static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes);
-	static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(UEdGraph* InGraph);
+	static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
 
 private:
-	static TArray<TSet<UEdGraphNode*>> FindIsolated(UEdGraph* InGraph, const TSet<UEdGraphNode*>& SelectedNodes);
+	TArray<TSet<UEdGraphNode*>> FindIsolated();
 	void CalculateNodesSize(FCalculateNodeBoundDelegate SizeCalculator);
 	void CalculatePinsOffset(FOffsetCalculatorDelegate OffsetCalculator);
 	TArray<FFormatterEdge> GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes);
 	static TArray<FFormatterNode*> GetSuccessorsForNodes(TSet<FFormatterNode*> Nodes);
 	TArray<FFormatterNode*> GetNodesGreaterThan(int32 i, TSet<FFormatterNode*>& Excluded);
-	void BuildNodes(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes);
+	void BuildNodes(TSet<UEdGraphNode*> SelectedNodes);
 	void BuildEdges(TSet<UEdGraphNode*> SelectedNodes);
-	void BuildNodesAndEdges(UEdGraph* InGraph, TSet<UEdGraphNode*> SelectedNodes);
+	void BuildNodesAndEdges(TSet<UEdGraphNode*> SelectedNodes);
 
 	void DoLayering();
 	void RemoveCycle();
@@ -132,16 +132,12 @@ private:
 	void SortInLayer(TArray<TArray<FFormatterNode*>>& Order, EEdGraphPinDirection Direction);
 	void DoOrderingSweep();
 	void DoPositioning();
-	FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes);
-	FFormatterGraph* BuildSubGraph(TSet<UEdGraphNode*> SelectedNodes) const;
+	FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes) const;
 	FFormatterNode* FindSourceNode() const;
 	FFormatterNode* FindSinkNode() const;
 	FFormatterNode* FindMedianNode() const;
 	TArray<FFormatterNode*> GetLeavesWidthPathDepthEqu0() const;
 	int32 CalculateLongestPath() const;
-	TSet<UEdGraphNode*> GetChildren(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes) const;
-	TSet<UEdGraphNode*> PickChildren(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes);
-	TSet<UEdGraphNode*> GetChildren(const UEdGraphNode* InNode) const;
 
 	UEdGraph* UEGraph;
 	FFormatterDelegates Delegates;
