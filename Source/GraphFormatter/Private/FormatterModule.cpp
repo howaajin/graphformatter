@@ -78,9 +78,22 @@ static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
 		if (GraphNode)
 		{
 			SelectedGraphNodes.Add(GraphNode);
+		}
+	}
+	return SelectedGraphNodes;
+}
+
+static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNode*> Selected)
+{
+	if (Selected.Num() != 0)
+	{
+		TSet<UEdGraphNode*> SelectedGraphNodes;
+		for (UEdGraphNode* GraphNode : Selected)
+		{
+			SelectedGraphNodes.Add(GraphNode);
 			if (GraphNode->IsA(UEdGraphNode_Comment::StaticClass()))
 			{
-				UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(Node);
+				UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(GraphNode);
 				auto NodesInComment = CommentNode->GetNodesUnderComment();
 				for (UObject* ObjectInComment : NodesInComment)
 				{
@@ -89,46 +102,13 @@ static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
 				}
 			}
 		}
-	}
-	return SelectedGraphNodes;
-}
-
-static TSet<UEdGraphNode*> GetNodesUnderComment(const UEdGraphNode* InNode)
-{
-	const UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(InNode);
-	auto ObjectsUnderComment = CommentNode->GetNodesUnderComment();
-	TSet<UEdGraphNode*> SubSelectedNodes;
-	for (auto Object : ObjectsUnderComment)
-	{
-		UEdGraphNode* Node = Cast<UEdGraphNode>(Object);
-		if (Node != nullptr)
-		{
-			SubSelectedNodes.Add(Node);
-		}
-	}
-	return SubSelectedNodes;
-}
-
-static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNode*> Selected)
-{
-	if (Selected.Num() != 0)
-	{
-		return Selected;
+		return SelectedGraphNodes;
 	}
 	TSet<UEdGraphNode*> SelectedGraphNodes;
 	for (UEdGraphNode* Node : Graph->Nodes)
 	{
 		SelectedGraphNodes.Add(Node);
 	}
-	TSet<UEdGraphNode*> NodesUnderComment;
-	for (auto SelectedNode : SelectedGraphNodes)
-	{
-		if (SelectedNode->IsA(UEdGraphNode_Comment::StaticClass()))
-		{
-			NodesUnderComment.Append(GetNodesUnderComment(SelectedNode));
-		}
-	}
-	SelectedGraphNodes.Append(NodesUnderComment);
 	return SelectedGraphNodes;
 }
 
@@ -324,7 +304,7 @@ void FFormatterModule::FormatGraph(FFormatterDelegates GraphDelegates)
 	auto SelectedNodes = GetSelectedNodes(GraphEditor);
 	SelectedNodes = DoSelectionStrategy(Graph, SelectedNodes);
 	FFormatterHacker::ComputeNodesSizeAtRatioOne(GraphDelegates, SelectedNodes);
-	FFormatterGraph GraphData(Graph, SelectedNodes, GraphDelegates);
+	FFormatterGraph GraphData(SelectedNodes, GraphDelegates);
 	GraphData.Format();
 	FFormatterHacker::RestoreZoomLevel(GraphDelegates);
 	auto FormatData = GraphData.GetBoundMap();
@@ -400,7 +380,7 @@ void FFormatterModule::ShutdownModule()
 		SettingsModule->UnregisterSettings("Editor", "Plugins", "GraphFormatter");
 	}
 #if ENGINE_MINOR_VERSION >= 24
-	if(GEditor)
+	if (GEditor)
 	{
 		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().Remove(GraphEditorDelegateHandle);
 	}
