@@ -145,7 +145,6 @@ private:
 	TMap<FGuid, FFormatterGraph*> SubGraphs;
 	TMap<FGuid, FFormatterPin*> PinsMap;
 	TMap<UEdGraphPin*, FFormatterPin*> OriginalPinsMap;
-	TSet<UEdGraphNode*> PickedNodes;
 	TArray<TArray<FFormatterNode*>> LayeredList;
 	TArray<FFormatterGraph*> IsolatedGraphs;
 	FSlateRect TotalBound;
