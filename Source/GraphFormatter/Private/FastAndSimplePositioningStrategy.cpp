@@ -89,6 +89,7 @@ void FFastAndSimplePositioningStrategy::DoVerticalAlignment()
 	int32 LayerEnd = IsUpperDirection ? LayeredNodes.Num() : -1;
 	for (int32 i = LayerStart; i != LayerEnd; i += LayerStep)
 	{
+		float Weight = 0.0f;
 		int32 Guide = IsLeftDirection ? -1 : INT_MAX;
 		int32 Step = IsLeftDirection ? 1 : -1;
 		int32 Start = IsLeftDirection ? 0 : LayeredNodes[i].Num() - 1;
@@ -103,18 +104,23 @@ void FFastAndSimplePositioningStrategy::DoVerticalAlignment()
 				int32 mb = FMath::CeilToInt((Adjacencies.Num() + 1) / 2.0f - 1);
 				for (int32 m = ma; m <= mb; m++)
 				{
-					auto& MedianNode = Adjacencies[m];
 					if (AlignMap[Node] == Node)
 					{
+						auto& MedianNode = Adjacencies[m];
 						bool IsMarked = ConflictMarks.Contains(MedianNode) && ConflictMarks[MedianNode] == Node;
+						float MaxWeight = MedianNode->GetMaxWeight(IsUpperDirection ? EGPD_Output : EGPD_Input);
+						float LinkWeight = Node->GetMaxWeightToNode(MedianNode, IsUpperDirection ? EGPD_Input : EGPD_Output);
 						const auto MedianNodePos = PosMap[MedianNode];
 						bool IsGuideAccepted = IsLeftDirection ? MedianNodePos > Guide : MedianNodePos < Guide;
-						if (!IsMarked && IsGuideAccepted)
+						if (!IsMarked)
 						{
-							AlignMap[MedianNode] = Node;
-							RootMap[Node] = RootMap[MedianNode];
-							AlignMap[Node] = RootMap[Node];
-							Guide = MedianNodePos;
+							if (IsGuideAccepted && LinkWeight == MaxWeight)
+							{
+								AlignMap[MedianNode] = Node;
+								RootMap[Node] = RootMap[MedianNode];
+								AlignMap[Node] = RootMap[Node];
+								Guide = MedianNodePos;
+							}
 						}
 					}
 				}

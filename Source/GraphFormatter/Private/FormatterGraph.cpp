@@ -114,11 +114,12 @@ FFormatterNode::FFormatterNode()
 	OutPins.Add(OutPin);
 }
 
-void FFormatterNode::Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin)
+void FFormatterNode::Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin, float Weight)
 {
 	const auto Edge = new FFormatterEdge;
 	Edge->From = SourcePin;
 	Edge->To = TargetPin;
+	Edge->Weight = Weight;
 	if (SourcePin->Direction == EGPD_Output)
 	{
 		OutEdges.Add(Edge);
@@ -220,6 +221,34 @@ float FFormatterNode::GetLinkedPositionToNode(const FFormatterNode* Node, EEdGra
 		return 0.0f;
 	}
 	return MedianPosition / Count;
+}
+
+float FFormatterNode::GetMaxWeight(EEdGraphPinDirection Direction)
+{
+	auto& Edges = Direction == EGPD_Input ? InEdges : OutEdges;
+	float MaxWeight = 0.0f;
+	for (auto Edge : Edges)
+	{
+		if (MaxWeight < Edge->Weight)
+		{
+			MaxWeight = Edge->Weight;
+		}
+	}
+	return MaxWeight;
+}
+
+float FFormatterNode::GetMaxWeightToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction)
+{
+	auto& Edges = Direction == EGPD_Input ? InEdges : OutEdges;
+	float MaxWeight = 0.0f;
+	for (auto Edge : Edges)
+	{
+		if (Edge->To->OwningNode == Node && MaxWeight < Edge->Weight)
+		{
+			MaxWeight = Edge->Weight;
+		}
+	}
+	return MaxWeight;
 }
 
 bool FFormatterNode::IsCrossingInnerSegment(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer) const
@@ -454,6 +483,16 @@ void FFormatterNode::UpdatePinsOffset()
 	}
 }
 
+static float GetEdgeWeight(UEdGraphPin* StartPin)
+{
+	float weight = 1;
+	if (StartPin->PinType.PinCategory == "exec")
+	{
+		weight = 99;
+	}
+	return  weight;
+}
+
 TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes)
 {
 	TArray<FFormatterEdge> Result;
@@ -474,7 +513,7 @@ TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSe
 					}
 					FFormatterPin* From = OriginalPinsMap[Pin];
 					FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-					Result.Add(FFormatterEdge{From, To});
+					Result.Add(FFormatterEdge{ From, To , GetEdgeWeight(Pin) });
 				}
 			}
 		}
@@ -492,7 +531,7 @@ TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSe
 				}
 				FFormatterPin* From = OriginalPinsMap[Pin];
 				FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-				Result.Add(FFormatterEdge{From, To});
+				Result.Add(FFormatterEdge{From, To, GetEdgeWeight(Pin) });
 			}
 		}
 	}
@@ -546,27 +585,34 @@ static TSet<UEdGraphNode*> GetNodesUnderComment(const UEdGraphNode* InNode, TSet
 
 void FFormatterGraph::BuildNodes(TSet<UEdGraphNode*> SelectedNodes)
 {
-	TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(SelectedNodes);
-	if (SortedCommentNodes.Num() != 0)
+	while (true)
 	{
-		// Topmost comment node has smallest negative depth value
-		const int32 Depth = SortedCommentNodes[0]->CommentDepth;
-
-		// Collapse all topmost comment nodes into virtual nodes.
-		for (auto CommentNode : SortedCommentNodes)
+		TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(SelectedNodes);
+		if (SortedCommentNodes.Num() != 0)
 		{
-			if (CommentNode->CommentDepth == Depth)
+			// Topmost comment node has smallest negative depth value
+			const int32 Depth = SortedCommentNodes[0]->CommentDepth;
+
+			// Collapse all topmost comment nodes into virtual nodes.
+			for (auto CommentNode : SortedCommentNodes)
 			{
-				auto NodesUnderComment = GetNodesUnderComment(CommentNode, SelectedNodes);
-				SelectedNodes = SelectedNodes.Difference(NodesUnderComment);
-				FFormatterNode* CollapsedNode = CollapseCommentNode(CommentNode, NodesUnderComment);
-				AddNode(CollapsedNode);
-				SelectedNodes.Remove(CommentNode);
+				if (CommentNode->CommentDepth == Depth)
+				{
+					auto NodesUnderComment = GetNodesUnderComment(CommentNode, SelectedNodes);
+					SelectedNodes = SelectedNodes.Difference(NodesUnderComment);
+					FFormatterNode* CollapsedNode = CollapseCommentNode(CommentNode, NodesUnderComment);
+					AddNode(CollapsedNode);
+					SelectedNodes.Remove(CommentNode);
+				}
+				else
+				{
+					break;
+				}
 			}
-			else
-			{
-				break;
-			}
+		}
+		else
+		{
+			break;
 		}
 	}
 
@@ -584,7 +630,7 @@ void FFormatterGraph::BuildEdges(TSet<UEdGraphNode*> SelectedNodes)
 		auto Edges = GetEdgeForNode(Node, SelectedNodes);
 		for (auto Edge : Edges)
 		{
-			Node->Connect(Edge.From, Edge.To);
+			Node->Connect(Edge.From, Edge.To, Edge.Weight);
 		}
 	}
 }
@@ -781,13 +827,13 @@ FFormatterGraph::FFormatterGraph(const FFormatterGraph& Other)
 		{
 			FFormatterPin* From = PinsMap[Edge->From->Guid];
 			FFormatterPin* To = PinsMap[Edge->To->Guid];
-			NodesMap[Node->Guid]->Connect(From, To);
+			NodesMap[Node->Guid]->Connect(From, To, Edge->Weight);
 		}
 		for (auto Edge : Node->OutEdges)
 		{
 			FFormatterPin* From = PinsMap[Edge->From->Guid];
 			FFormatterPin* To = PinsMap[Edge->To->Guid];
-			NodesMap[Node->Guid]->Connect(From, To);
+			NodesMap[Node->Guid]->Connect(From, To, Edge->Weight);
 		}
 	}
 	for (auto Isolated : Other.IsolatedGraphs)
@@ -971,11 +1017,11 @@ void FFormatterGraph::AddDummyNodes()
 				Node->Disconnect(Edge->From, Edge->To);
 				auto dummyNode = new FFormatterNode();
 				AddNode(dummyNode);
-				Node->Connect(Edge->From, dummyNode->InPins[0]);
-				dummyNode->Connect(dummyNode->InPins[0], Edge->From);
-				dummyNode->Connect(dummyNode->OutPins[0], Edge->To);
+				Node->Connect(Edge->From, dummyNode->InPins[0], Edge->Weight);
+				dummyNode->Connect(dummyNode->InPins[0], Edge->From, Edge->Weight);
+				dummyNode->Connect(dummyNode->OutPins[0], Edge->To, Edge->Weight);
 				Edge->To->OwningNode->Disconnect(Edge->To, Edge->From);
-				Edge->To->OwningNode->Connect(Edge->To, dummyNode->OutPins[0]);
+				Edge->To->OwningNode->Connect(Edge->To, dummyNode->OutPins[0], Edge->Weight);
 				NextLayer.Add(dummyNode);
 			}
 		}

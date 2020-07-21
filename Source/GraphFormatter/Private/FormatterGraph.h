@@ -35,6 +35,7 @@ class FFormatterEdge
 public:
 	FFormatterPin* From;
 	FFormatterPin* To;
+	float Weight = 1;
 	bool IsCrossing(const FFormatterEdge* Edge) const;
 	bool IsInnerSegment();
 };
@@ -56,7 +57,7 @@ public:
 	FFormatterNode(const FFormatterNode& Other);
 	FFormatterNode();
 	~FFormatterNode();
-	void Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin);
+	void Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin, float Weight = 1);
 	void Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetPin);
 	TArray<FFormatterNode*> GetSuccessors() const;
 	TArray<FFormatterNode*> GetPredecessors() const;
@@ -75,6 +76,8 @@ public:
 	TArray<FFormatterEdge*> GetEdgeLinkedToLayer(const TArray<FFormatterNode*>& Layer, EEdGraphPinDirection Direction) const;
 	float CalcBarycenter(const TArray<FFormatterNode*>& Layer, EEdGraphPinDirection Direction) const;
 	float GetLinkedPositionToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction, bool IsHorizontalDirection = true);
+	float GetMaxWeight(EEdGraphPinDirection Direction);
+	float GetMaxWeightToNode(const FFormatterNode* Node, EEdGraphPinDirection Direction);
 	int32 CalcPriority(EEdGraphPinDirection Direction) const;
 	void InitPosition(FVector2D InPosition);
 	void SetPosition(FVector2D InPosition);
