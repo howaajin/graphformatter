@@ -225,8 +225,17 @@ FFormatterDelegates GetDelegates(TGraphEditor* Editor)
 	return GraphFormatterDelegates;
 }
 
+// SGraphNodeComment do not tell us what nodes under it until we select it.
+// This function invoke HandleSelection to do the work.
 void FFormatterHacker::UpdateCommentNodes(SGraphEditor* GraphEditor, UEdGraph* Graph)
 {
+	// No need to do this hack when AutoSizeComments is used.
+	auto AutoSizeCommentModule = FModuleManager::Get().GetModule(FName("AutoSizeComments"));
+	if (AutoSizeCommentModule)
+	{
+		return;
+	}
+
 	for (UEdGraphNode* Node : Graph->Nodes)
 	{
 		if (!Node->IsA(UEdGraphNode_Comment::StaticClass()))
@@ -234,6 +243,7 @@ void FFormatterHacker::UpdateCommentNodes(SGraphEditor* GraphEditor, UEdGraph* G
 			continue;
 		}
 		SGraphNode* NodeWidget = GetGraphNode(GraphEditor, Node);
+		// Actually, we can't invoke HandleSelection if NodeWidget is not a SGraphNodeComment.
 		SGraphNodeComment* CommentNode = StaticCast<SGraphNodeComment*>(NodeWidget);
 		(CommentNode->*FPrivateAccessor<FAccessSGraphNodeCommentHandleSelection>::Member)(false, true);
 	}
