@@ -174,7 +174,7 @@ void FFastAndSimplePositioningStrategy::DoHorizontalCompaction()
 		{
 			auto& RootNode = RootMap[Node];
 			const float Shift = ShiftMap[SinkMap[RootNode]];
-			if (IsLeftDirection && Shift < FLT_MAX || !IsLeftDirection&& Shift > -FLT_MAX)
+			if ((IsLeftDirection && Shift < FLT_MAX) || (!IsLeftDirection && Shift > -FLT_MAX))
 			{
 				(*XMap)[Node] = (*XMap)[Node] + Shift;
 			}
