@@ -36,7 +36,11 @@ static const int32 OffsetOf_FMaterialEditor_GraphEditor = 0x2b0;
 static const int32 OffsetOf_FSoundCueEditor_SoundCueGraphEditor = 0x1e0;
 static const int32 OffsetOf_SNodePanel_ZoomLevels = 0x218;
 #else
+#if ENGINE_MAJOR_VERSION >= 5
+DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessMaterialGraphEditor, FMaterialEditor, TWeakPtr<SGraphEditor>, FocusedGraphEdPtr)
+#else
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessMaterialGraphEditor, FMaterialEditor, TSharedPtr<SGraphEditor>, GraphEditor)
+#endif
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSoundCueGraphEditor, FSoundCueEditor, TSharedPtr<SGraphEditor>, SoundCueGraphEditor)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessBlueprintGraphEditor, FBlueprintEditor, TWeakPtr<SGraphEditor>, FocusedGraphEdPtr)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessAIGraphEditor, FAIGraphEditor, TWeakPtr<SGraphEditor>, UpdateGraphEdPtr)
@@ -77,7 +81,12 @@ SGraphEditor* GetGraphEditor(const FMaterialEditor* Editor)
 #if UE_BUILD_DEBUG
 	auto& GraphEditor = *OffsetBy<TSharedPtr<SGraphEditor>, OffsetOf_FMaterialEditor_GraphEditor>(Editor);
 #else
+#if ENGINE_MAJOR_VERSION >= 5
+	auto& FocusedGraphEd = Editor->*FPrivateAccessor<FAccessMaterialGraphEditor>::Member;
+	auto GraphEditor = FocusedGraphEd.Pin();
+#else
 	auto& GraphEditor = Editor->*FPrivateAccessor<FAccessMaterialGraphEditor>::Member;
+#endif
 #endif
 	if (GraphEditor.IsValid())
 	{

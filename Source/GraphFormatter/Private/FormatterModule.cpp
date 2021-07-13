@@ -15,8 +15,11 @@
 #include "FormatterSettings.h"
 #include "FormatterStyle.h"
 #include "FormatterCommands.h"
+#if (ENGINE_MINOR_VERSION >= 24 || ENGINE_MAJOR_VERSION >= 5)
+#else
 #include "Toolkits/AssetEditorManager.h"
 #include "Toolkits/AssetEditorToolkit.h"
+#endif
 #include "FormatterHacker.h"
 #include "ScopedTransaction.h"
 #include "EdGraphNode_Comment.h"
@@ -57,7 +60,7 @@ void FFormatterModule::StartupModule()
 
 	check(GEditor);
 	FFormatterCommands::Register();
-#if ENGINE_MINOR_VERSION >= 24
+#if (ENGINE_MINOR_VERSION >= 24 || ENGINE_MAJOR_VERSION >= 5)
 	GraphEditorDelegateHandle = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().AddRaw(this, &FFormatterModule::HandleAssetEditorOpened);
 #else
 	GraphEditorDelegateHandle = FAssetEditorManager::Get().OnAssetOpenedInEditor().AddRaw(this, &FFormatterModule::HandleAssetEditorOpened);
@@ -379,7 +382,7 @@ void FFormatterModule::ShutdownModule()
 	{
 		SettingsModule->UnregisterSettings("Editor", "Plugins", "GraphFormatter");
 	}
-#if ENGINE_MINOR_VERSION >= 24
+#if (ENGINE_MINOR_VERSION >= 24 || ENGINE_MAJOR_VERSION >= 5)
 	if (GEditor)
 	{
 		GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().Remove(GraphEditorDelegateHandle);
