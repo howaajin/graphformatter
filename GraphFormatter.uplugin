@@ -22,10 +22,15 @@
 			"LoadingPhase": "PostEngineInit",
 			"WhitelistPlatforms": [
 				"Win64",
-				"Win32",
 				"Mac",
 				"Linux"
 			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Metasound",
+			"Enabled": true
 		}
 	]
 }
