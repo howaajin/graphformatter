@@ -21,6 +21,7 @@
 #include "FormatterDelegates.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Editor/BehaviorTreeEditor/Private/BehaviorTreeEditor.h"
+#include "Metasound/Source/MetasoundEditor/Private/MetasoundEditor.h"
 #include "FormatterGraph.h"
 
 /* 
@@ -47,6 +48,7 @@ DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessAIGraphEditor, FAIGraphEditor, TWeakPtr<S
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorImpl, SGraphEditor, TSharedPtr<SGraphEditor>, Implementation)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorPanel, SGraphEditorImpl, TSharedPtr<SGraphPanel>, GraphPanel)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphPanelZoomLevels, SNodePanel, TUniquePtr<FZoomLevelsContainer>, ZoomLevels)
+DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessMetaSoundGraph, Metasound::Editor::FEditor, TSharedPtr<SGraphEditor>, MetasoundGraphEditor)
 #endif
 struct FAccessSGraphPanelPostChangedZoom
 {
@@ -115,6 +117,16 @@ SGraphEditor* GetGraphEditor(const FBehaviorTreeEditor* Editor)
 	if (GraphEditor.IsValid())
 	{
 		return GraphEditor.Pin().Get();
+	}
+	return nullptr;
+}
+
+SGraphEditor* GetGraphEditor(const Metasound::Editor::FEditor* Editor)
+{
+	auto &GraphEditor = Editor->*FPrivateAccessor<FAccessMetaSoundGraph>::Member;
+	if (GraphEditor.IsValid())
+	{
+		return GraphEditor.Get();
 	}
 	return nullptr;
 }
@@ -337,6 +349,12 @@ FFormatterDelegates FFormatterHacker::GetDelegates(UObject* Object, IAssetEditor
 			});
 			return GraphFormatterDelegates;
 		}
+	}
+	if(Instance->GetEditorName() == "MetaSoundEditor")
+	{
+        Metasound::Editor::FEditor* MetasoundEditor = StaticCast<Metasound::Editor::FEditor*>(Instance);
+        GraphFormatterDelegates = ::GetDelegates(MetasoundEditor);
+        return GraphFormatterDelegates;
 	}
 	return GraphFormatterDelegates;
 }

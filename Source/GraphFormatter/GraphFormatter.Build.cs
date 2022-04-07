@@ -12,8 +12,17 @@ namespace UnrealBuildTool.Rules
 		public GraphFormatter(ReadOnlyTargetRules Target) : base(Target)
 		{
 			PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+
+			var EngineDir = Path.GetFullPath(Target.RelativeEnginePath);
+
 			PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Public"));
-			PrivateDependencyModuleNames.AddRange(
+
+            PrivateIncludePaths.AddRange(
+                new string[] {
+                     Path.Combine(EngineDir, @"Plugins\Runtime"),
+                });
+
+            PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{
 					"Core",
@@ -33,6 +42,10 @@ namespace UnrealBuildTool.Rules
 					"AIModule",
 					"AIGraph",
 					"BehaviorTreeEditor",
+					"AudioWidgets",
+					"AudioSynesthesia",
+					"MetasoundEditor",
+					"MetasoundFrontend",
 				}
 			);
 		}
