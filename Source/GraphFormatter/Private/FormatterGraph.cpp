@@ -659,6 +659,9 @@ FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, 
 	if (SelectedNodes.Num() > 0)
 	{
 		FFormatterGraph* SubGraph = new FFormatterGraph(SelectedNodes, Delegates);
+		float BorderHeight = Delegates.CommentHeight.Execute(CommentNode);
+		const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+		SubGraph->SetBorder(Settings.CommentBorder, BorderHeight + Settings.CommentBorder, Settings.CommentBorder, Settings.CommentBorder);
 		Node->SetSubGraph(SubGraph);
 	}
 	return Node;
@@ -1195,7 +1198,6 @@ TMap<UEdGraphPin*, FVector2D> FFormatterGraph::GetPinsOffset()
 {
 	TMap<UEdGraphPin*, FVector2D> Result;
 	const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-	const auto Border = FVector2D(Settings.CommentBorder, Settings.CommentBorder);
 	if (IsolatedGraphs.Num() > 0)
 	{
 		for (auto IsolatedGraph : IsolatedGraphs)
@@ -1215,12 +1217,12 @@ TMap<UEdGraphPin*, FVector2D> FFormatterGraph::GetPinsOffset()
 	{
 		for (auto OutPin : Node->OutPins)
 		{
-			FVector2D PinOffset = Node->Position + OutPin->NodeOffset - TotalBound.GetTopLeft() + Border;
+			FVector2D PinOffset = Node->Position + OutPin->NodeOffset - TotalBound.GetTopLeft() + FVector2D(Border.Left, Border.Top);
 			Result.Add(OutPin->OriginalPin, PinOffset);
 		}
 		for (auto InPin : Node->InPins)
 		{
-			FVector2D PinOffset = Node->Position + InPin->NodeOffset - TotalBound.GetTopLeft() + Border;
+			FVector2D PinOffset = Node->Position + InPin->NodeOffset - TotalBound.GetTopLeft() + FVector2D(Border.Left, Border.Top);
 			Result.Add(InPin->OriginalPin, PinOffset);
 		}
 	}
@@ -1292,6 +1294,16 @@ TSet<UEdGraphNode*> FFormatterGraph::GetOriginalNodes() const
 		}
 	}
 	return Result;
+}
+
+void FFormatterGraph::SetBorder(float Left, float Top, float Right, float Bottom)
+{
+    this->Border = FSlateRect(Left, Top, Right, Bottom);
+}
+
+FSlateRect FFormatterGraph::GetBorder() const
+{
+	return Border;
 }
 
 void FFormatterGraph::CalculateNodesSize(FCalculateNodeBoundDelegate SizeCalculator)
@@ -1387,8 +1399,9 @@ void FFormatterGraph::Format()
 			SubGraph->Format();
 			Node->UpdatePinsOffset();
 			auto Bound = SubGraph->GetTotalBound();
-			Node->InitPosition(Bound.GetTopLeft() - FVector2D(Settings.CommentBorder, Settings.CommentBorder));
-			Node->Size = SubGraph->GetTotalBound().GetSize() + FVector2D(Settings.CommentBorder * 2, Settings.CommentBorder * 2);
+			auto SubGraphBorder = SubGraph->GetBorder();
+            Node->InitPosition(Bound.GetTopLeft() - FVector2D(SubGraphBorder.Left, SubGraphBorder.Top));
+            Node->Size = SubGraph->GetTotalBound().GetSize() + FVector2D(SubGraphBorder.Left + SubGraphBorder.Right, SubGraphBorder.Bottom + SubGraphBorder.Top);
 		}
 		if (Nodes.Num() > 0)
 		{

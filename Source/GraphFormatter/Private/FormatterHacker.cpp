@@ -164,6 +164,21 @@ static SGraphNode* GetGraphNode(const SGraphEditor* GraphEditor, const UEdGraphN
 	return nullptr;
 }
 
+static int GetCommentNodeTitleHeight(const SGraphEditor* GraphEditor, const UEdGraphNode* Node)
+{
+    SGraphNode* CommentNode = GetGraphNode(GraphEditor, Node);
+    if (CommentNode)
+    {
+        SGraphNodeComment* NodeWidget = StaticCast<SGraphNodeComment*>(CommentNode);
+        FSlateRect Rect = NodeWidget->GetTitleRect();
+        return Rect.GetSize().Y;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 static void TickWidgetRecursively(SWidget* Widget)
 {
 	Widget->GetChildren();
@@ -217,6 +232,11 @@ FFormatterDelegates GetDelegates(TGraphEditor* Editor)
 	{
 		SGraphEditor* GraphEditor = GetGraphEditor(Editor);
 		return GetPinOffset(GraphEditor, Pin);
+	});
+    GraphFormatterDelegates.CommentHeight.BindLambda([=](UEdGraphNode* Node) 
+	{
+		SGraphEditor* GraphEditor = GetGraphEditor(Editor);
+		return GetCommentNodeTitleHeight(GraphEditor, Node);
 	});
 	GraphFormatterDelegates.GetGraphDelegate.BindLambda([=]()
 	{

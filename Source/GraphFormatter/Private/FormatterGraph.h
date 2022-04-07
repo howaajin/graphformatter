@@ -108,6 +108,8 @@ public:
 	TArray<FFormatterPin*> GetInputPins() const;
 	TArray<FFormatterPin*> GetOutputPins() const;
 	TSet<UEdGraphNode*> GetOriginalNodes() const;
+	void SetBorder(float Left, float Top, float Right, float Bottom);
+    FSlateRect GetBorder() const;
 
 	/**
 	 * Get edges between two layers.
@@ -151,4 +153,5 @@ private:
 	TArray<TArray<FFormatterNode*>> LayeredList;
 	TArray<FFormatterGraph*> IsolatedGraphs;
 	FSlateRect TotalBound;
+	FSlateRect Border;
 };
