@@ -19,13 +19,7 @@
 		{
 			"Name": "GraphFormatter",
 			"Type": "Editor",
-			"LoadingPhase": "PostEngineInit",
-			"WhitelistPlatforms": [
-				"Win64",
-				"Win32",
-				"Mac",
-				"Linux"
-			]
+			"LoadingPhase": "PostEngineInit"
 		}
 	]
 }
