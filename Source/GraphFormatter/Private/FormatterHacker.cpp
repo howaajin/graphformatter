@@ -49,6 +49,7 @@ DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorImpl, SGraphEditor, TSharedPt
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorPanel, SGraphEditorImpl, TSharedPtr<SGraphPanel>, GraphPanel)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphPanelZoomLevels, SNodePanel, TUniquePtr<FZoomLevelsContainer>, ZoomLevels)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessMetaSoundGraph, Metasound::Editor::FEditor, TSharedPtr<SGraphEditor>, MetasoundGraphEditor)
+DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessMetaSoundObject, Metasound::Editor::FEditor, UObject*, Metasound)
 #endif
 struct FAccessSGraphPanelPostChangedZoom
 {
@@ -354,6 +355,18 @@ FFormatterDelegates FFormatterHacker::GetDelegates(UObject* Object, IAssetEditor
 	{
         Metasound::Editor::FEditor* MetasoundEditor = StaticCast<Metasound::Editor::FEditor*>(Instance);
         GraphFormatterDelegates = ::GetDelegates(MetasoundEditor);
+	    GraphFormatterDelegates.MarkGraphDirty.BindLambda([MetasoundEditor]()
+	    {
+	        auto& Metasound = MetasoundEditor->*FPrivateAccessor<FAccessMetaSoundObject>::Member;
+			Metasound->MarkPackageDirty();
+		});
+	    GraphFormatterDelegates.MoveTo.BindLambda([=](UEdGraphNode* Node, const FVector2D& position)
+	    {
+			SGraphNode::FNodeSet NodeFilter;
+	        auto Editor = GraphFormatterDelegates.GetGraphEditorDelegate.Execute();
+			auto GraphNode = GetGraphNode(Editor, Node);
+			GraphNode->MoveTo(position, NodeFilter);
+	    });
         return GraphFormatterDelegates;
 	}
 	return GraphFormatterDelegates;

@@ -322,8 +322,15 @@ void FFormatterModule::FormatGraph(FFormatterDelegates GraphDelegates)
 		}
 		else
 		{
-			formatData.Key->NodePosX = formatData.Value.GetTopLeft().X;
-			formatData.Key->NodePosY = formatData.Value.GetTopLeft().Y;
+			if(GraphDelegates.MoveTo.IsBound())
+			{
+			    GraphDelegates.MoveTo.Execute(formatData.Key, formatData.Value.GetTopLeft());
+			}
+		    else
+		    {
+		        formatData.Key->NodePosX = formatData.Value.GetTopLeft().X;
+		        formatData.Key->NodePosY = formatData.Value.GetTopLeft().Y;
+		    }
 		}
 	}
 	Graph->NotifyGraphChanged();

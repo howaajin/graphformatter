@@ -20,6 +20,7 @@ DECLARE_DELEGATE_RetVal(bool, FIsVerticalPositioning);
 DECLARE_DELEGATE_RetVal_OneParam(FVector2D, FCalculateNodeBoundDelegate, UEdGraphNode*);
 DECLARE_DELEGATE_RetVal_OneParam(FVector2D, FOffsetCalculatorDelegate, UEdGraphPin*);
 DECLARE_DELEGATE_RetVal_TwoParams(bool, FNodeComparer, const FFormatterNode&, const FFormatterNode&);
+DECLARE_DELEGATE_RetVal_TwoParams(void, FMoveNodeTo, UEdGraphNode*, const FVector2D&);
 DECLARE_DELEGATE_RetVal_OneParam(float, FCommentHeightDelegate, UEdGraphNode*);
 
 struct FFormatterDelegates
@@ -32,4 +33,5 @@ struct FFormatterDelegates
 	FMarkGraphDirty MarkGraphDirty;
 	FIsVerticalPositioning IsVerticalPositioning;
 	FNodeComparer NodeComparer;
+	FMoveNodeTo MoveTo;
 };
