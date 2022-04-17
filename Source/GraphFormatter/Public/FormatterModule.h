@@ -37,4 +37,9 @@ public:
     {
         return FModuleManager::Get().IsModuleLoaded("GraphFormatter");
     }
+
+    virtual void FormatGraphAutomated(TObjectPtr<UObject> Object)
+    {
+        //Do nothing
+    }
 };
