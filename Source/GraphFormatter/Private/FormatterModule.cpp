@@ -117,6 +117,7 @@ static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNod
 
 void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance)
 {
+	const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
 	FFormatterDelegates GraphDelegates = FFormatterHacker::GetDelegates(Object, Instance);
 	if (GraphDelegates.GetGraphDelegate.IsBound())
 	{
@@ -130,14 +131,17 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
 		ToolkitCommands->MapAction(Commands.FormatGraph,
 		                           FExecuteAction::CreateRaw(this, &FFormatterModule::FormatGraph, GraphDelegates),
 		                           FCanExecuteAction());
-		TSharedPtr<FExtender> Extender = FAssetEditorToolkit::GetSharedToolBarExtensibilityManager()->GetAllExtenders();
-		assetEditorToolkit->AddToolbarExtender(Extender);
-		Extender->AddToolBarExtension(
-			"Asset",
-			EExtensionHook::After,
-			ToolkitCommands,
-			FToolBarExtensionDelegate::CreateRaw(this, &FFormatterModule::FillToolbar)
-		);
+		if (!Settings->DisableToolbar)
+		{
+            TSharedPtr<FExtender> Extender = FAssetEditorToolkit::GetSharedToolBarExtensibilityManager()->GetAllExtenders();
+            assetEditorToolkit->AddToolbarExtender(Extender);
+            Extender->AddToolBarExtension(
+                "Asset",
+                EExtensionHook::After,
+                ToolkitCommands,
+                FToolBarExtensionDelegate::CreateRaw(this, &FFormatterModule::FillToolbar)
+            );
+		}
 		if (!ToolkitCommands->IsActionMapped(Commands.StraightenConnections))
 		{
 			ToolkitCommands->MapAction(Commands.StraightenConnections,

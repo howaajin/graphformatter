@@ -25,6 +25,10 @@ public:
 
 	UFormatterSettings();
 
+	/** Toolbar toggle */
+	UPROPERTY(config, EditAnywhere, Category = "Options")
+	bool DisableToolbar;
+
 	/** Positioning algorithm*/
 	UPROPERTY(config, EditAnywhere, Category = "Options")
 	EGraphFormatterPositioningAlgorithm PositioningAlgorithm;

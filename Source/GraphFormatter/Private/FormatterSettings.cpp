@@ -6,7 +6,8 @@
 #include "FormatterSettings.h"
 
 UFormatterSettings::UFormatterSettings()
-	: PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
+	: DisableToolbar(false)
+    , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
 	, CommentBorder(45)
 	, HorizontalSpacing(100)
 	, VerticalSpacing(80)
