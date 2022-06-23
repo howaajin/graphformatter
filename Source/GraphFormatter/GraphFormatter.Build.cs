@@ -42,10 +42,6 @@ namespace UnrealBuildTool.Rules
 					"AIModule",
 					"AIGraph",
 					"BehaviorTreeEditor",
-					"AudioWidgets",
-					"AudioSynesthesia",
-					"MetasoundEditor",
-					"MetasoundFrontend",
 				}
 			);
 		}
