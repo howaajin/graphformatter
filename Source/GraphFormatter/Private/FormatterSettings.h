@@ -34,7 +34,7 @@ public:
 	EGraphFormatterPositioningAlgorithm PositioningAlgorithm;
 
 	/** Border thickness */
-	UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 45))
+	UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 1))
 	int32 CommentBorder;
 
 	/** Spacing between two layers */
