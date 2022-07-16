@@ -166,12 +166,15 @@ static SGraphNode* GetGraphNode(const SGraphEditor* GraphEditor, const UEdGraphN
 
 static int GetCommentNodeTitleHeight(const SGraphEditor* GraphEditor, const UEdGraphNode* Node)
 {
+    /** Titlebar Offset - taken from SGraphNodeComment.cpp */
+    static const FSlateRect TitleBarOffset(13, 8, -3, 0);
+
     SGraphNode* CommentNode = GetGraphNode(GraphEditor, Node);
     if (CommentNode)
     {
         SGraphNodeComment* NodeWidget = StaticCast<SGraphNodeComment*>(CommentNode);
         FSlateRect Rect = NodeWidget->GetTitleRect();
-        return Rect.GetSize().Y;
+        return Rect.GetSize().Y + TitleBarOffset.Top;
     }
     else
     {
