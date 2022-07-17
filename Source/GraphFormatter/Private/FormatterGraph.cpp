@@ -453,23 +453,23 @@ void FFormatterNode::SetSubGraph(FFormatterGraph* InSubGraph)
 	}
 }
 
-void FFormatterNode::UpdatePinsOffset()
+void FFormatterNode::UpdatePinsOffset(FVector2D Border)
 {
 	if (SubGraph != nullptr)
 	{
 		auto PinsOffset = SubGraph->GetPinsOffset();
 		for (auto Pin : InPins)
 		{
-			if (PinsOffset.Contains(Pin->OriginalPin))
-			{
-				Pin->NodeOffset = PinsOffset[Pin->OriginalPin];
-			}
-		}
-		for (auto Pin : OutPins)
-		{
-			if (PinsOffset.Contains(Pin->OriginalPin))
-			{
-				Pin->NodeOffset = PinsOffset[Pin->OriginalPin];
+            if (PinsOffset.Contains(Pin->OriginalPin))
+            {
+                Pin->NodeOffset = PinsOffset[Pin->OriginalPin] + Border;
+            }
+        }
+        for (auto Pin : OutPins)
+        {
+            if (PinsOffset.Contains(Pin->OriginalPin))
+            {
+                Pin->NodeOffset = PinsOffset[Pin->OriginalPin] + Border;
 			}
 		}
 		InPins.Sort([](const FFormatterPin& A, const FFormatterPin& B)
@@ -1197,7 +1197,6 @@ void FFormatterGraph::DoPositioning()
 TMap<UEdGraphPin*, FVector2D> FFormatterGraph::GetPinsOffset()
 {
 	TMap<UEdGraphPin*, FVector2D> Result;
-	const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
 	if (IsolatedGraphs.Num() > 0)
 	{
 		for (auto IsolatedGraph : IsolatedGraphs)
@@ -1205,9 +1204,9 @@ TMap<UEdGraphPin*, FVector2D> FFormatterGraph::GetPinsOffset()
 			auto SubBound = IsolatedGraph->GetTotalBound();
 			auto Offset = SubBound.GetTopLeft() - TotalBound.GetTopLeft();
 			auto SubOffsets = IsolatedGraph->GetPinsOffset();
-			for (auto SubOffsetPair : SubOffsets)
+            for (auto& SubOffsetPair : SubOffsets)
 			{
-				SubOffsetPair.Value = SubOffsetPair.Value + Offset;
+				SubOffsetPair.Value = SubOffsetPair.Value + Offset ;
 			}
 			Result.Append(SubOffsets);
 		}
@@ -1217,12 +1216,12 @@ TMap<UEdGraphPin*, FVector2D> FFormatterGraph::GetPinsOffset()
 	{
 		for (auto OutPin : Node->OutPins)
 		{
-			FVector2D PinOffset = Node->Position + OutPin->NodeOffset - TotalBound.GetTopLeft() + FVector2D(Border.Left, Border.Top);
+			FVector2D PinOffset = Node->Position + OutPin->NodeOffset - TotalBound.GetTopLeft() ;
 			Result.Add(OutPin->OriginalPin, PinOffset);
 		}
 		for (auto InPin : Node->InPins)
 		{
-			FVector2D PinOffset = Node->Position + InPin->NodeOffset - TotalBound.GetTopLeft() + FVector2D(Border.Left, Border.Top);
+			FVector2D PinOffset = Node->Position + InPin->NodeOffset - TotalBound.GetTopLeft() ;
 			Result.Add(InPin->OriginalPin, PinOffset);
 		}
 	}
@@ -1306,13 +1305,13 @@ FSlateRect FFormatterGraph::GetBorder() const
 	return Border;
 }
 
-void FFormatterGraph::CalculateNodesSize(FCalculateNodeBoundDelegate SizeCalculator)
+void FFormatterGraph::CalculateNodesSize(FFormatterDelegates GraphDelegates)
 {
 	if (IsolatedGraphs.Num() > 1)
 	{
 		for (auto IsolatedGraph : IsolatedGraphs)
 		{
-			IsolatedGraph->CalculateNodesSize(SizeCalculator);
+			IsolatedGraph->CalculateNodesSize(GraphDelegates);
 		}
 	}
 	else
@@ -1323,21 +1322,21 @@ void FFormatterGraph::CalculateNodesSize(FCalculateNodeBoundDelegate SizeCalcula
 			{
 				if (SubGraphs.Contains(Node->Guid))
 				{
-					SubGraphs[Node->Guid]->CalculateNodesSize(SizeCalculator);
+					SubGraphs[Node->Guid]->CalculateNodesSize(GraphDelegates);
 				}
-				Node->Size = SizeCalculator.Execute(Node->OriginalNode);
+				Node->Size = GraphDelegates.BoundCalculator.Execute(Node->OriginalNode);
 			}
 		}
 	}
 }
 
-void FFormatterGraph::CalculatePinsOffset(FOffsetCalculatorDelegate OffsetCalculator)
+void FFormatterGraph::CalculatePinsOffset(FFormatterDelegates GraphDelegates)
 {
 	if (IsolatedGraphs.Num() > 1)
 	{
 		for (auto IsolatedGraph : IsolatedGraphs)
 		{
-			IsolatedGraph->CalculatePinsOffset(OffsetCalculator);
+            IsolatedGraph->CalculatePinsOffset(GraphDelegates);
 		}
 	}
 	else
@@ -1348,15 +1347,15 @@ void FFormatterGraph::CalculatePinsOffset(FOffsetCalculatorDelegate OffsetCalcul
 			{
 				if (SubGraphs.Contains(Node->Guid))
 				{
-					SubGraphs[Node->Guid]->CalculatePinsOffset(OffsetCalculator);
+					SubGraphs[Node->Guid]->CalculatePinsOffset(GraphDelegates);
 				}
 				for (auto Pin : Node->InPins)
 				{
-					Pin->NodeOffset = OffsetCalculator.Execute(Pin->OriginalPin);
+					Pin->NodeOffset = GraphDelegates.OffsetCalculator.Execute(Pin->OriginalPin) ;
 				}
 				for (auto Pin : Node->OutPins)
 				{
-					Pin->NodeOffset = OffsetCalculator.Execute(Pin->OriginalPin);
+                    Pin->NodeOffset = GraphDelegates.OffsetCalculator.Execute(Pin->OriginalPin) ;
 				}
 			}
 		}
@@ -1365,16 +1364,19 @@ void FFormatterGraph::CalculatePinsOffset(FOffsetCalculatorDelegate OffsetCalcul
 
 void FFormatterGraph::Format()
 {
-	const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+    CalculateNodesSize(Delegates);
+    CalculatePinsOffset(Delegates);
 	if (IsolatedGraphs.Num() > 1)
 	{
 		FSlateRect PreBound;
 		for (auto isolatedGraph : IsolatedGraphs)
 		{
 			isolatedGraph->Format();
+
 			if (PreBound.IsValid())
 			{
-				isolatedGraph->SetPosition(PreBound.GetBottomLeft());
+                isolatedGraph->SetPosition(PreBound.GetBottomLeft() );
 			}
 			auto Bound = isolatedGraph->GetTotalBound();
 			if (TotalBound.IsValid())
@@ -1390,16 +1392,14 @@ void FFormatterGraph::Format()
 	}
 	else
 	{
-		CalculateNodesSize(Delegates.BoundCalculator);
-		CalculatePinsOffset(Delegates.OffsetCalculator);
 		for (auto SubGraphPair : SubGraphs)
 		{
 			auto SubGraph = SubGraphPair.Value;
 			auto Node = NodesMap[SubGraphPair.Key];
 			SubGraph->Format();
-			Node->UpdatePinsOffset();
-			auto Bound = SubGraph->GetTotalBound();
 			auto SubGraphBorder = SubGraph->GetBorder();
+            Node->UpdatePinsOffset(FVector2D(SubGraphBorder.Left, SubGraphBorder.Top));
+			auto Bound = SubGraph->GetTotalBound();
             Node->InitPosition(Bound.GetTopLeft() - FVector2D(SubGraphBorder.Left, SubGraphBorder.Top));
             Node->Size = SubGraph->GetTotalBound().GetSize() + FVector2D(SubGraphBorder.Left + SubGraphBorder.Right, SubGraphBorder.Bottom + SubGraphBorder.Top);
 		}

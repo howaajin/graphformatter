@@ -83,7 +83,7 @@ public:
 	void SetPosition(FVector2D InPosition);
 	FVector2D GetPosition() const;
 	void SetSubGraph(FFormatterGraph* InSubGraph);
-	void UpdatePinsOffset();
+	void UpdatePinsOffset(FVector2D Border);
 	friend class FFormatterGraph;
 private:
 	float OrderValue;
@@ -120,10 +120,11 @@ public:
 	static void CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer);
 	static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
 
+	void CalculateNodesSize(FFormatterDelegates SizeCalculator);
+	void CalculatePinsOffset(FFormatterDelegates OffsetCalculator);
+
 private:
 	TArray<TSet<UEdGraphNode*>> FindIsolated();
-	void CalculateNodesSize(FCalculateNodeBoundDelegate SizeCalculator);
-	void CalculatePinsOffset(FOffsetCalculatorDelegate OffsetCalculator);
 	TArray<FFormatterEdge> GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes);
 	static TArray<FFormatterNode*> GetSuccessorsForNodes(TSet<FFormatterNode*> Nodes);
 	TArray<FFormatterNode*> GetNodesGreaterThan(int32 i, TSet<FFormatterNode*>& Excluded);
@@ -153,5 +154,5 @@ private:
 	TArray<TArray<FFormatterNode*>> LayeredList;
 	TArray<FFormatterGraph*> IsolatedGraphs;
 	FSlateRect TotalBound;
-	FSlateRect Border;
+	FSlateRect Border = FSlateRect(0, 0, 0, 0);
 };
