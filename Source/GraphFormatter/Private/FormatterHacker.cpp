@@ -23,19 +23,6 @@
 #include "Editor/BehaviorTreeEditor/Private/BehaviorTreeEditor.h"
 #include "FormatterGraph.h"
 
-/* 
-** Offsets for the purpose of debug, only tested on Win64
-** On Windows, acquiring the pointer to private member of a class in debug build don't work as expect
-** So I have to do this hack
-*/
-#if UE_BUILD_DEBUG
-static const int32 OffsetOf_FBlueprintEditor_FocusedGraphEdPtr = 0x208;
-static const int32 OffsetOf_SGraphEditor_Implementation = 0x308;
-static const int32 OffsetOf_SGraphEditorImpl_GraphPanel = 0x390;
-static const int32 OffsetOf_FMaterialEditor_GraphEditor = 0x2b0;
-static const int32 OffsetOf_FSoundCueEditor_SoundCueGraphEditor = 0x1e0;
-static const int32 OffsetOf_SNodePanel_ZoomLevels = 0x218;
-#else
 #if ENGINE_MAJOR_VERSION >= 5
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessMaterialGraphEditor, FMaterialEditor, TWeakPtr<SGraphEditor>, FocusedGraphEdPtr)
 #else
@@ -47,7 +34,6 @@ DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessAIGraphEditor, FAIGraphEditor, TWeakPtr<S
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorImpl, SGraphEditor, TSharedPtr<SGraphEditor>, Implementation)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorPanel, SGraphEditorImpl, TSharedPtr<SGraphPanel>, GraphPanel)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphPanelZoomLevels, SNodePanel, TUniquePtr<FZoomLevelsContainer>, ZoomLevels)
-#endif
 struct FAccessSGraphPanelPostChangedZoom
 {
 	using MemberType = FunctionWrapper<SNodePanel, void>::Signature;
@@ -64,11 +50,7 @@ TType* OffsetBy(TClass* Class)
 
 SGraphEditor* GetGraphEditor(const FBlueprintEditor* Editor)
 {
-#if UE_BUILD_DEBUG
-	auto& Ptr = *OffsetBy<TWeakPtr<SGraphEditor>, OffsetOf_FBlueprintEditor_FocusedGraphEdPtr>(Editor);
-#else
 	auto& Ptr = Editor->*FPrivateAccessor<FAccessBlueprintGraphEditor>::Member;
-#endif
 	if (Ptr.IsValid())
 	{
 		return Ptr.Pin().Get();
@@ -78,30 +60,22 @@ SGraphEditor* GetGraphEditor(const FBlueprintEditor* Editor)
 
 SGraphEditor* GetGraphEditor(const FMaterialEditor* Editor)
 {
-#if UE_BUILD_DEBUG
-	auto& GraphEditor = *OffsetBy<TSharedPtr<SGraphEditor>, OffsetOf_FMaterialEditor_GraphEditor>(Editor);
-#else
 #if ENGINE_MAJOR_VERSION >= 5
-	auto& FocusedGraphEd = Editor->*FPrivateAccessor<FAccessMaterialGraphEditor>::Member;
-	auto GraphEditor = FocusedGraphEd.Pin();
+    auto& FocusedGraphEd = Editor->*FPrivateAccessor<FAccessMaterialGraphEditor>::Member;
+    auto GraphEditor = FocusedGraphEd.Pin();
 #else
 	auto& GraphEditor = Editor->*FPrivateAccessor<FAccessMaterialGraphEditor>::Member;
 #endif
-#endif
-	if (GraphEditor.IsValid())
-	{
-		return GraphEditor.Get();
-	}
-	return nullptr;
+    if (GraphEditor.IsValid())
+    {
+        return GraphEditor.Get();
+    }
+    return nullptr;
 }
 
 SGraphEditor* GetGraphEditor(const FSoundCueEditor* Editor)
 {
-#if UE_BUILD_DEBUG
-	auto& GraphEditor = *OffsetBy<TSharedPtr<SGraphEditor>, OffsetOf_FSoundCueEditor_SoundCueGraphEditor>(Editor);
-#else
 	auto& GraphEditor = Editor->*FPrivateAccessor<FAccessSoundCueGraphEditor>::Member;
-#endif
 	if (GraphEditor.IsValid())
 	{
 		return GraphEditor.Get();
@@ -121,17 +95,9 @@ SGraphEditor* GetGraphEditor(const FBehaviorTreeEditor* Editor)
 
 SGraphPanel* GetGraphPanel(const SGraphEditor* GraphEditor)
 {
-#if UE_BUILD_DEBUG
-	auto& Impl = *OffsetBy<TSharedPtr<SGraphEditor>, OffsetOf_SGraphEditor_Implementation>(GraphEditor);
-#else
 	auto& Impl = GraphEditor->*FPrivateAccessor<FAccessSGraphEditorImpl>::Member;
-#endif
 	SGraphEditorImpl* GraphEditorImpl = StaticCast<SGraphEditorImpl*>(Impl.Get());
-#if UE_BUILD_DEBUG
-	TSharedPtr<SGraphPanel> GraphPanel = *OffsetBy<TSharedPtr<SGraphPanel>, OffsetOf_SGraphEditorImpl_GraphPanel>(GraphEditorImpl);
-#else
 	auto& GraphPanel = GraphEditorImpl->*FPrivateAccessor<FAccessSGraphEditorPanel>::Member;
-#endif
 	if (GraphPanel.IsValid())
 	{
 		return GraphPanel.Get();
@@ -145,12 +111,12 @@ static TUniquePtr<FZoomLevelsContainer> TempZoomLevels;
 class FTopZoomLevelContainer : public FZoomLevelsContainer
 {
 public:
-	float GetZoomAmount(int32 InZoomLevel) const override { return 1.0f; }
-	int32 GetNearestZoomLevel(float InZoomAmount) const override { return 0; }
-	FText GetZoomText(int32 InZoomLevel) const override { return FText::FromString(TEXT("1:1")); }
-	int32 GetNumZoomLevels() const override { return 1; }
-	int32 GetDefaultZoomLevel() const override { return 0; }
-	EGraphRenderingLOD::Type GetLOD(int32 InZoomLevel) const override { return EGraphRenderingLOD::DefaultDetail; }
+    virtual float GetZoomAmount(int32 InZoomLevel) const override { return 1.0f; }
+    virtual int32 GetNearestZoomLevel(float InZoomAmount) const override { return 0; }
+    virtual FText GetZoomText(int32 InZoomLevel) const override { return FText::FromString(TEXT("1:1")); }
+    virtual int32 GetNumZoomLevels() const override { return 1; }
+    virtual int32 GetDefaultZoomLevel() const override { return 0; }
+    virtual EGraphRenderingLOD::Type GetLOD(int32 InZoomLevel) const override { return EGraphRenderingLOD::DefaultDetail; }
 };
 
 static SGraphNode* GetGraphNode(const SGraphEditor* GraphEditor, const UEdGraphNode* Node)
@@ -356,11 +322,7 @@ void FFormatterHacker::ComputeNodesSizeAtRatioOne(FFormatterDelegates GraphDeleg
 			{
 				TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
 			}
-#if UE_BUILD_DEBUG
-			auto& ZoomLevels = *OffsetBy<TUniquePtr<FZoomLevelsContainer>, OffsetOf_SNodePanel_ZoomLevels>(NodePanel);
-#else
 			auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
-#endif
 			TempZoomLevels = MoveTemp(ZoomLevels);
 			ZoomLevels = MoveTemp(TopZoomLevels);
 			(NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
@@ -390,11 +352,7 @@ void FFormatterHacker::RestoreZoomLevel(FFormatterDelegates GraphDelegates)
 			{
 				TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
 			}
-#if UE_BUILD_DEBUG
-			auto& ZoomLevels = *OffsetBy<TUniquePtr<FZoomLevelsContainer>, OffsetOf_SNodePanel_ZoomLevels>(NodePanel);
-#else
 			auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
-#endif
 			ZoomLevels = MoveTemp(TempZoomLevels);
 			(NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
 			NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
