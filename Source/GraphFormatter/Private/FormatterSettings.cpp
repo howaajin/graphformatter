@@ -6,11 +6,11 @@
 #include "FormatterSettings.h"
 
 UFormatterSettings::UFormatterSettings()
-	: DisableToolbar(false)
-    , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
-	, CommentBorder(45)
-	, HorizontalSpacing(100)
-	, VerticalSpacing(80)
-	, MaxOrderingIterations(10)
+    : DisableToolbar(false)
+      , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
+      , CommentBorder(45)
+      , HorizontalSpacing(100)
+      , VerticalSpacing(80)
+      , MaxOrderingIterations(10)
 {
 }

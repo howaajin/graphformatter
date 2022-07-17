@@ -25,13 +25,13 @@ DECLARE_DELEGATE_RetVal_OneParam(float, FCommentHeightDelegate, UEdGraphNode*);
 
 struct FFormatterDelegates
 {
-	FCalculateNodeBoundDelegate BoundCalculator;
-	FGetGraphDelegate GetGraphDelegate;
-	FGetGraphEditorDelegate GetGraphEditorDelegate;
-	FOffsetCalculatorDelegate OffsetCalculator;
-	FCommentHeightDelegate CommentHeight;
-	FMarkGraphDirty MarkGraphDirty;
-	FIsVerticalPositioning IsVerticalPositioning;
-	FNodeComparer NodeComparer;
-	FMoveNodeTo MoveTo;
+    FCalculateNodeBoundDelegate BoundCalculator;
+    FGetGraphDelegate GetGraphDelegate;
+    FGetGraphEditorDelegate GetGraphEditorDelegate;
+    FOffsetCalculatorDelegate OffsetCalculator;
+    FCommentHeightDelegate CommentHeight;
+    FMarkGraphDirty MarkGraphDirty;
+    FIsVerticalPositioning IsVerticalPositioning;
+    FNodeComparer NodeComparer;
+    FMoveNodeTo MoveTo;
 };

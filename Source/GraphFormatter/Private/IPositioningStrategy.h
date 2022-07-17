@@ -13,13 +13,14 @@ class FFormatterNode;
 class IPositioningStrategy
 {
 protected:
-	FSlateRect TotalBound;
-	TArray< TArray<FFormatterNode*> > LayeredNodes;
+    FSlateRect TotalBound;
+    TArray<TArray<FFormatterNode*>> LayeredNodes;
 public:
-	explicit IPositioningStrategy(TArray< TArray<FFormatterNode*> >& InLayeredNodes)
-		: LayeredNodes(InLayeredNodes)
-	{
-	}
-	virtual ~IPositioningStrategy() = default;
-	FSlateRect GetTotalBound() const { return  TotalBound; }
+    explicit IPositioningStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes)
+        : LayeredNodes(InLayeredNodes)
+    {
+    }
+
+    virtual ~IPositioningStrategy() = default;
+    FSlateRect GetTotalBound() const { return TotalBound; }
 };

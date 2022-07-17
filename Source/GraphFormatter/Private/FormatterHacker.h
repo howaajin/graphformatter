@@ -14,8 +14,8 @@ class IAssetEditorInstance;
 class FFormatterHacker
 {
 public:
-	static void UpdateCommentNodes(SGraphEditor* GraphEditor, UEdGraph* Graph);
-	static FFormatterDelegates GetDelegates(UObject* Object, IAssetEditorInstance* Instance);
-	static void ComputeNodesSizeAtRatioOne(FFormatterDelegates GraphDelegates, TSet<UEdGraphNode*> Nodes);
-	static void RestoreZoomLevel(FFormatterDelegates GraphDelegates);
+    static void UpdateCommentNodes(SGraphEditor* GraphEditor, UEdGraph* Graph);
+    static FFormatterDelegates GetDelegates(UObject* Object, IAssetEditorInstance* Instance);
+    static void ComputeNodesSizeAtRatioOne(FFormatterDelegates GraphDelegates, TSet<UEdGraphNode*> Nodes);
+    static void RestoreZoomLevel(FFormatterDelegates GraphDelegates);
 };

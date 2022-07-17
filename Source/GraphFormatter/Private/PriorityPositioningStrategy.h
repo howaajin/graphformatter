@@ -11,5 +11,5 @@
 class FPriorityPositioningStrategy : public IPositioningStrategy
 {
 public:
-	explicit FPriorityPositioningStrategy(TArray<TArray<FFormatterNode*> >& InLayeredNodes);
+    explicit FPriorityPositioningStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes);
 };

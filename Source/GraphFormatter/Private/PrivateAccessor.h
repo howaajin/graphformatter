@@ -5,35 +5,35 @@
 
 #pragma once
 
-template<typename TClass>
+template <typename TClass>
 struct FPrivateAccessor
 {
-	static typename TClass::MemberType Member;
+    static typename TClass::MemberType Member;
 };
 
-template<typename TClass>
+template <typename TClass>
 typename TClass::MemberType FPrivateAccessor<TClass>::Member;
 
-template<typename TClass, typename TClass::MemberType m>
+template <typename TClass, typename TClass::MemberType m>
 struct FPrivateRob
 {
-	FPrivateRob() { FPrivateAccessor<TClass>::Member = m; }
-	static FPrivateRob Instance;
+    FPrivateRob() { FPrivateAccessor<TClass>::Member = m; }
+    static FPrivateRob Instance;
 };
 
-template<class TClass, class TType, typename... Args>
+template <class TClass, class TType, typename... Args>
 struct FConstFunctionWrapper
 {
-	using Signature = TType(TClass::*)(Args...) const;
+    using Signature = TType(TClass::*)(Args ...) const;
 };
 
-template<class TClass, class TType, typename... Args>
+template <class TClass, class TType, typename... Args>
 struct FunctionWrapper
 {
-	using Signature = TType(TClass::*)(Args...);
+    using Signature = TType(TClass::*)(Args ...);
 };
 
-template<typename TClass, typename TClass::MemberType m>
+template <typename TClass, typename TClass::MemberType m>
 FPrivateRob<TClass, m> FPrivateRob<TClass, m>::Instance;
 
 #define DECLARE_PRIVATE_MEMBER_ACCESSOR( Name, TargetClass, TargetMemberType, TargetMember ) \

@@ -11,51 +11,51 @@
 UENUM()
 enum class EGraphFormatterPositioningAlgorithm
 {
-	EEvenlyInLayer UMETA(DisplayName = "Place node evenly in layer"),
-	EFastAndSimpleMethodTop UMETA(DisplayName = "FAS Top"),
-	EFastAndSimpleMethodMedian UMETA(DisplayName = "FAS Median"),
-	ELayerSweep UMETA(DisplayName = "Layer sweep"),
+    EEvenlyInLayer UMETA(DisplayName = "Place node evenly in layer"),
+    EFastAndSimpleMethodTop UMETA(DisplayName = "FAS Top"),
+    EFastAndSimpleMethodMedian UMETA(DisplayName = "FAS Median"),
+    ELayerSweep UMETA(DisplayName = "Layer sweep"),
 };
 
 UCLASS(config = Editor)
 class GRAPHFORMATTER_API UFormatterSettings : public UObject
 {
 public:
-	GENERATED_BODY()
+    GENERATED_BODY()
 
-	UFormatterSettings();
+    UFormatterSettings();
 
-	/** Toolbar toggle */
-	UPROPERTY(config, EditAnywhere, Category = "Options")
-	bool DisableToolbar;
+    /** Toolbar toggle */
+    UPROPERTY(config, EditAnywhere, Category = "Options")
+    bool DisableToolbar;
 
-	/** Positioning algorithm*/
-	UPROPERTY(config, EditAnywhere, Category = "Options")
-	EGraphFormatterPositioningAlgorithm PositioningAlgorithm;
+    /** Positioning algorithm*/
+    UPROPERTY(config, EditAnywhere, Category = "Options")
+    EGraphFormatterPositioningAlgorithm PositioningAlgorithm;
 
-	/** Border thickness */
-	UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 1))
-	int32 CommentBorder;
+    /** Border thickness */
+    UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 1))
+    int32 CommentBorder;
 
-	/** Spacing between two layers */
-	UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
-	int32 HorizontalSpacing;
+    /** Spacing between two layers */
+    UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
+    int32 HorizontalSpacing;
 
-	/** Spacing between two nodes */
-	UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
-	int32 VerticalSpacing;
+    /** Spacing between two nodes */
+    UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
+    int32 VerticalSpacing;
 
-	/** Vertex ordering max iterations */
-	UPROPERTY(config, EditAnywhere, Category = "Performance", meta = (ClampMin = 0, ClampMax = 100))
-	int32 MaxOrderingIterations;
+    /** Vertex ordering max iterations */
+    UPROPERTY(config, EditAnywhere, Category = "Performance", meta = (ClampMin = 0, ClampMax = 100))
+    int32 MaxOrderingIterations;
 
-	/** Straight connections old settings */
-	UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
-	FVector2D ForwardSplineTangentFromHorizontalDelta;
-	UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
-	FVector2D ForwardSplineTangentFromVerticalDelta;
-	UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
-	FVector2D BackwardSplineTangentFromHorizontalDelta;
-	UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
-	FVector2D BackwardSplineTangentFromVerticalDelta;
+    /** Straight connections old settings */
+    UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
+    FVector2D ForwardSplineTangentFromHorizontalDelta;
+    UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
+    FVector2D ForwardSplineTangentFromVerticalDelta;
+    UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
+    FVector2D BackwardSplineTangentFromHorizontalDelta;
+    UPROPERTY(config, Category= "Graph Formatter", BlueprintReadWrite)
+    FVector2D BackwardSplineTangentFromVerticalDelta;
 };
