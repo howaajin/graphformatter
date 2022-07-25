@@ -142,7 +142,7 @@ private:
     FFormatterNode* FindSourceNode() const;
     FFormatterNode* FindSinkNode() const;
     FFormatterNode* FindMedianNode() const;
-    TArray<FFormatterNode*> GetLeavesWidthPathDepthEqu0() const;
+    TArray<FFormatterNode*> GetLeavesWithPathDepthEqu0() const;
     int32 CalculateLongestPath() const;
 
     FFormatterDelegates Delegates;

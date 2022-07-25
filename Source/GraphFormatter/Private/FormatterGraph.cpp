@@ -903,7 +903,7 @@ int32 FFormatterGraph::CalculateLongestPath() const
     int32 LongestPath = 1;
     while (true)
     {
-        auto Leaves = GetLeavesWidthPathDepthEqu0();
+        auto Leaves = GetLeavesWithPathDepthEqu0();
         if (Leaves.Num() == 0)
         {
             break;
@@ -945,7 +945,7 @@ void FFormatterGraph::CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& L
     }
 }
 
-TArray<FFormatterNode*> FFormatterGraph::GetLeavesWidthPathDepthEqu0() const
+TArray<FFormatterNode*> FFormatterGraph::GetLeavesWithPathDepthEqu0() const
 {
     TArray<FFormatterNode*> Result;
     for (auto Node : Nodes)
