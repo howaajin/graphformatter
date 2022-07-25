@@ -734,7 +734,7 @@ void FFormatterGraph::RemoveCycle()
     }
     while (auto MedianNode = ClonedGraph->FindMedianNode())
     {
-        for (auto Edge : MedianNode->InEdges)
+        for (auto Edge : MedianNode->OutEdges)
         {
             FFormatterPin* From = PinsMap[Edge->From->Guid];
             FFormatterPin* To = PinsMap[Edge->To->Guid];
