@@ -1376,7 +1376,8 @@ void FFormatterGraph::Format()
 
             if (PreBound.IsValid())
             {
-                isolatedGraph->SetPosition(PreBound.GetBottomLeft());
+                FVector2D StartCorner = Delegates.IsVerticalPositioning.IsBound() && Delegates.IsVerticalPositioning.Execute() ? PreBound.GetTopRight() : PreBound.GetBottomLeft();
+                isolatedGraph->SetPosition(StartCorner);
             }
             auto Bound = isolatedGraph->GetTotalBound();
             if (TotalBound.IsValid())
@@ -1387,7 +1388,9 @@ void FFormatterGraph::Format()
             {
                 TotalBound = Bound;
             }
-            PreBound = TotalBound.OffsetBy(FVector2D(0, Settings.VerticalSpacing));
+
+            FVector2D Offset = Delegates.IsVerticalPositioning.IsBound() && Delegates.IsVerticalPositioning.Execute() ? FVector2D(Settings.VerticalSpacing, 0) : FVector2D(0, Settings.VerticalSpacing);
+            PreBound = TotalBound.OffsetBy(Offset);
         }
     }
     else
