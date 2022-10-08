@@ -21,6 +21,7 @@
 #include "FormatterDelegates.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Editor/BehaviorTreeEditor/Private/BehaviorTreeEditor.h"
+#include "Editor/BehaviorTreeEditor/Classes/BehaviorTreeGraphNode.h"
 #include "FormatterGraph.h"
 
 #if ENGINE_MAJOR_VERSION >= 5
