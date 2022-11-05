@@ -325,7 +325,11 @@ void FFormatterHacker::ComputeNodesSizeAtRatioOne(FFormatterDelegates GraphDeleg
             TempZoomLevels = MoveTemp(ZoomLevels);
             ZoomLevels = MoveTemp(TopZoomLevels);
             (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
+#if (ENGINE_MAJOR_VERSION >= 5)
             NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
+#else
+            NodePanel->InvalidatePrepass();
+#endif
             for (auto Node : Nodes)
             {
                 auto GraphNode = GetGraphNode(GraphEditor, Node);
@@ -354,7 +358,11 @@ void FFormatterHacker::RestoreZoomLevel(FFormatterDelegates GraphDelegates)
             auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
             ZoomLevels = MoveTemp(TempZoomLevels);
             (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
+#if (ENGINE_MAJOR_VERSION >= 5)
             NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
+#else
+            NodePanel->InvalidatePrepass();
+#endif
         }
     }
 }
