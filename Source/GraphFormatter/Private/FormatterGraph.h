@@ -8,7 +8,6 @@
 #include "CoreMinimal.h"
 #include "EdGraph/EdGraph.h"
 #include "Layout/SlateRect.h"
-#include "FormatterDelegates.h"
 
 class IPositioningStrategy;
 class FFormatterGraph;
@@ -94,7 +93,7 @@ class FFormatterGraph
 {
 public:
     void BuildIsolated();
-    FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes, FFormatterDelegates InDelegates);
+    FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes);
     FFormatterGraph(const FFormatterGraph& Other);
     ~FFormatterGraph();
     void AddNode(FFormatterNode* InNode);
@@ -111,17 +110,24 @@ public:
     void SetBorder(float Left, float Top, float Right, float Bottom);
     FSlateRect GetBorder() const;
 
-    /**
-     * Get edges between two layers.
-     */
     static TArray<FFormatterEdge*> GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode = nullptr);
     static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true);
     static void CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order);
     static void CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer);
     static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
 
-    void CalculateNodesSize(FFormatterDelegates SizeCalculator);
-    void CalculatePinsOffset(FFormatterDelegates OffsetCalculator);
+    enum class EInOutOption
+    {
+        GAN_ALL,
+        GAN_IN,
+        GAN_OUT
+    };
+    static TSet<UEdGraphNode*> GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
+    static TSet<UEdGraphNode*> GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
+    static FVector2D GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
+
+    void CalculateNodesSize();
+    void CalculatePinsOffset();
 
 private:
     TArray<TSet<UEdGraphNode*>> FindIsolated();
@@ -145,7 +151,6 @@ private:
     TArray<FFormatterNode*> GetLeavesWithPathDepthEqu0() const;
     int32 CalculateLongestPath() const;
 
-    FFormatterDelegates Delegates;
     TArray<FFormatterNode*> Nodes;
     TMap<FGuid, FFormatterNode*> NodesMap;
     TMap<FGuid, FFormatterGraph*> SubGraphs;

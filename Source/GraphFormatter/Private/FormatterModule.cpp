@@ -5,27 +5,27 @@
 
 #include "FormatterModule.h"
 #include "CoreMinimal.h"
-#include "Modules/ModuleManager.h"
+#include "EdGraph/EdGraph.h"
 #include "Editor.h"
 #include "EditorStyle.h"
-#include "GraphEditorModule.h"
-#include "EdGraph/EdGraph.h"
-#include "ISettingsSection.h"
-#include "ISettingsModule.h"
+#include "Formatter.h"
+#include "FormatterCommands.h"
 #include "FormatterSettings.h"
 #include "FormatterStyle.h"
-#include "FormatterCommands.h"
+#include "GraphEditorModule.h"
+#include "ISettingsModule.h"
+#include "ISettingsSection.h"
+#include "Modules/ModuleManager.h"
 #if (ENGINE_MINOR_VERSION >= 24 || ENGINE_MAJOR_VERSION >= 5)
 #else
 #include "Toolkits/AssetEditorManager.h"
 #include "Toolkits/AssetEditorToolkit.h"
 #endif
-#include "FormatterHacker.h"
-#include "ScopedTransaction.h"
 #include "EdGraphNode_Comment.h"
 #include "FormatterGraph.h"
 #include "Framework/MultiBox/MultiBoxDefs.h"
 #include "GraphEditorSettings.h"
+#include "ScopedTransaction.h"
 
 #define LOCTEXT_NAMESPACE "GraphFormatter"
 
@@ -34,8 +34,8 @@ class FFormatterModule : public IGraphFormatterModule
     virtual void StartupModule() override;
     virtual void ShutdownModule() override;
     void HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance);
+    void HandleEditorWidgetConstructed(UObject* Object);
     void FillToolbar(FToolBarBuilder& ToolbarBuilder);
-    void FormatGraph(FFormatterDelegates GraphDelegates);
     void ToggleStraightenConnections();
     bool IsStraightenConnectionsEnabled();
     FDelegateHandle GraphEditorDelegateHandle;
@@ -51,76 +51,34 @@ void FFormatterModule::StartupModule()
     ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings");
     if (SettingsModule != nullptr)
     {
-        ISettingsSectionPtr SettingsSection = SettingsModule->RegisterSettings("Editor", "Plugins", "GraphFormatter",
-                                                                               LOCTEXT("GraphFormatterSettingsName", "Graph Formatter"),
-                                                                               LOCTEXT("GraphFormatterSettingsDescription", "Configure the Graph Formatter plug-in."),
-                                                                               GetMutableDefault<UFormatterSettings>()
+        ISettingsSectionPtr SettingsSection = SettingsModule->RegisterSettings(
+            "Editor",
+            "Plugins",
+            "GraphFormatter",
+            LOCTEXT("GraphFormatterSettingsName", "Graph Formatter"),
+            LOCTEXT("GraphFormatterSettingsDescription", "Configure the Graph Formatter plug-in."),
+            GetMutableDefault<UFormatterSettings>()
         );
     }
 
-    check(GEditor);
     FFormatterCommands::Register();
-#if (ENGINE_MINOR_VERSION >= 24 || ENGINE_MAJOR_VERSION >= 5)
-    GraphEditorDelegateHandle = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().AddRaw(this, &FFormatterModule::HandleAssetEditorOpened);
-#else
-	GraphEditorDelegateHandle = FAssetEditorManager::Get().OnAssetOpenedInEditor().AddRaw(this, &FFormatterModule::HandleAssetEditorOpened);
-#endif
+    if(GEditor)
+    {
+        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().AddRaw(this, &FFormatterModule::HandleEditorWidgetConstructed);
+        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().AddRaw(this, &FFormatterModule::HandleAssetEditorOpened);
+    }
     AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)));
     AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)));
     AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)));
     AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::ELayerSweep)));
 }
 
-static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
-{
-    TSet<UEdGraphNode*> SelectedGraphNodes;
-    TSet<UObject*> SelectedNodes = GraphEditor->GetSelectedNodes();
-    for (UObject* Node : SelectedNodes)
-    {
-        UEdGraphNode* GraphNode = Cast<UEdGraphNode>(Node);
-        if (GraphNode)
-        {
-            SelectedGraphNodes.Add(GraphNode);
-        }
-    }
-    return SelectedGraphNodes;
-}
-
-static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNode*> Selected)
-{
-    if (Selected.Num() != 0)
-    {
-        TSet<UEdGraphNode*> SelectedGraphNodes;
-        for (UEdGraphNode* GraphNode : Selected)
-        {
-            SelectedGraphNodes.Add(GraphNode);
-            if (GraphNode->IsA(UEdGraphNode_Comment::StaticClass()))
-            {
-                UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(GraphNode);
-                auto NodesInComment = CommentNode->GetNodesUnderComment();
-                for (UObject* ObjectInComment : NodesInComment)
-                {
-                    UEdGraphNode* NodeInComment = Cast<UEdGraphNode>(ObjectInComment);
-                    SelectedGraphNodes.Add(NodeInComment);
-                }
-            }
-        }
-        return SelectedGraphNodes;
-    }
-    TSet<UEdGraphNode*> SelectedGraphNodes;
-    for (UEdGraphNode* Node : Graph->Nodes)
-    {
-        SelectedGraphNodes.Add(Node);
-    }
-    return SelectedGraphNodes;
-}
-
 void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance)
 {
-    const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
-    FFormatterDelegates GraphDelegates = FFormatterHacker::GetDelegates(Object, Instance);
-    if (GraphDelegates.GetGraphDelegate.IsBound())
+    FFormatter::Instance().SetCurrentEditor(Object, Instance);
+    if (FFormatter::Instance().IsAssetSupported(Object))
     {
+        const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
         FAssetEditorToolkit* assetEditorToolkit = StaticCast<FAssetEditorToolkit*>(Instance);
         const FFormatterCommands& Commands = FFormatterCommands::Get();
         TSharedRef<FUICommandList> ToolkitCommands = assetEditorToolkit->GetToolkitCommands();
@@ -128,9 +86,16 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
         {
             return;
         }
-        ToolkitCommands->MapAction(Commands.FormatGraph,
-                                   FExecuteAction::CreateRaw(this, &FFormatterModule::FormatGraph, GraphDelegates),
-                                   FCanExecuteAction());
+        ToolkitCommands->MapAction(
+            Commands.FormatGraph,
+            FExecuteAction::CreateLambda([] { FFormatter::Instance().Format(); }),
+            FCanExecuteAction()
+        );
+        ToolkitCommands->MapAction(
+            Commands.PlaceBlock,
+            FExecuteAction::CreateLambda([] { FFormatter::Instance().PlaceBlock(); }),
+            FCanExecuteAction()
+        );
         if (!Settings->DisableToolbar)
         {
             TSharedPtr<FExtender> Extender = FAssetEditorToolkit::GetSharedToolBarExtensibilityManager()->GetAllExtenders();
@@ -144,10 +109,23 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
         }
         if (!ToolkitCommands->IsActionMapped(Commands.StraightenConnections))
         {
-            ToolkitCommands->MapAction(Commands.StraightenConnections,
-                                       FExecuteAction::CreateRaw(this, &FFormatterModule::ToggleStraightenConnections),
-                                       FCanExecuteAction(),
-                                       FIsActionChecked::CreateRaw(this, &FFormatterModule::IsStraightenConnectionsEnabled));
+            ToolkitCommands->MapAction(
+                Commands.StraightenConnections,
+                FExecuteAction::CreateRaw(this, &FFormatterModule::ToggleStraightenConnections),
+                FCanExecuteAction(),
+                FIsActionChecked::CreateRaw(this, &FFormatterModule::IsStraightenConnectionsEnabled)
+            );
+        }
+    }
+}
+
+void FFormatterModule::HandleEditorWidgetConstructed(UObject* Object)
+{
+    if(GEditor)
+    {
+        if(IAssetEditorInstance* Instance = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->FindEditorForAsset(Object, false))
+        {
+            FFormatter::Instance().SetCurrentEditor(Object, Instance);
         }
     }
 }
@@ -181,8 +159,7 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
         {
             return *Option == Settings->PositioningAlgorithm;
         });
-        ToolbarBuilder.AddToolBarButton
-        (
+        ToolbarBuilder.AddToolBarButton(
             Commands.FormatGraph,
             NAME_None,
             TAttribute<FText>(),
@@ -190,98 +167,109 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
             TAttribute<FSlateIcon>(FSlateIcon(FFormatterStyle::Get()->GetStyleSetName(), "GraphFormatter.ApplyIcon")),
             FName(TEXT("GraphFormatter"))
         );
-        auto HorizontalEditArea = SNew(SHorizontalBox)
-            + SHorizontalBox::Slot()
-            .Padding(2.0f)
-            [
-                SNew(SSpinBox<int32>)
-				.MinValue(0)
-				.MaxValue(1000)
-				.MinSliderValue(0)
-				.MaxSliderValue(1000)
-				.ToolTipText(LOCTEXT("GraphFormatterHorizontalSpacingiToolTips", "Spacing between two layers."))
-				.Value(Settings->HorizontalSpacing)
-				.MinDesiredWidth(80)
-				.Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Visible : EVisibility::Collapsed; })
-				.OnValueCommitted_Lambda([MutableSettings](int32 Number, ETextCommit::Type CommitInfo)
+        auto HorizontalEditArea = SNew(SHorizontalBox) + SHorizontalBox::Slot().Padding(2.0f)
+        [
+            SNew(SSpinBox<int32>)
+            .MinValue(0)
+            .MaxValue(1000)
+            .MinSliderValue(0)
+            .MaxSliderValue(1000)
+            .ToolTipText(LOCTEXT("GraphFormatterHorizontalSpacingiToolTips", "Spacing between two layers."))
+            .Value(Settings->HorizontalSpacing)
+            .MinDesiredWidth(80)
+            .Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Visible : EVisibility::Collapsed; })
+            .OnValueCommitted_Lambda([MutableSettings](int32 Number, ETextCommit::Type CommitInfo)
+            {
+                MutableSettings->HorizontalSpacing = Number; MutableSettings->PostEditChange(); MutableSettings->SaveConfig();
+            })
+        ]
+        +SHorizontalBox::Slot()
+        .Padding(2.0f)
+        [
+            SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm>>).Visibility_Lambda([]()
+            {
+                return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Visible : EVisibility::Collapsed;
+            })
+            .ContentPadding(FMargin(6.0f, 2.0f))
+            .OptionsSource(&AlgorithmOptions)
+            .ToolTipText_Lambda([]() { return FText::FromString("Positioning Algorithm"); })
+            .InitiallySelectedItem(AlgorithmOptions[SelectedAlgorithmIndex])
+            .OnSelectionChanged_Lambda([=](TSharedPtr<EGraphFormatterPositioningAlgorithm> NewOption, ESelectInfo::Type SelectInfo)
+            {
+                if (SelectInfo != ESelectInfo::Direct)
                 {
-                    MutableSettings->HorizontalSpacing = Number;
+                    MutableSettings->PositioningAlgorithm = *NewOption;
                     MutableSettings->PostEditChange();
                     MutableSettings->SaveConfig();
-                })
-            ]
-            + SHorizontalBox::Slot()
-            .Padding(2.0f)
+                }
+            })
+            .OnGenerateWidget_Lambda([](TSharedPtr<EGraphFormatterPositioningAlgorithm> AlgorithmEnum)
+            {
+                return SNew(STextBlock).Text(GetEnumAsString(*AlgorithmEnum.Get()));
+            })
             [
-                SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm> >)
-				.Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Visible : EVisibility::Collapsed; })
-				.ContentPadding(FMargin(6.0f, 2.0f))
-				.OptionsSource(&AlgorithmOptions)
-				.ToolTipText_Lambda([]() { return FText::FromString("Positioning Algorithm"); })
-				.InitiallySelectedItem(AlgorithmOptions[SelectedAlgorithmIndex])
-				.OnSelectionChanged_Lambda([=](TSharedPtr<EGraphFormatterPositioningAlgorithm> NewOption, ESelectInfo::Type SelectInfo)
-                {
-                    if (SelectInfo != ESelectInfo::Direct)
-                    {
-                        MutableSettings->PositioningAlgorithm = *NewOption;
-                        MutableSettings->PostEditChange();
-                        MutableSettings->SaveConfig();
-                    }
-                })
-				.OnGenerateWidget_Lambda([](TSharedPtr<EGraphFormatterPositioningAlgorithm> AlgorithmEnum) { return SNew(STextBlock).Text(GetEnumAsString(*AlgorithmEnum.Get())); })
-                [
-                    SNew(STextBlock)
-                    .Text_Lambda([Settings]() { return GetEnumAsString(Settings->PositioningAlgorithm); })
-                ]
-            ];
+                SNew(STextBlock)
+                .Text_Lambda([Settings]() { return GetEnumAsString(Settings->PositioningAlgorithm); })
+            ]
+        ];
         auto VerticalEditArea = SNew(SVerticalBox)
-            + SVerticalBox::Slot()
-            .Padding(2.0f)
-            [
-                SNew(SSpinBox<int32>)
-				.Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Collapsed : EVisibility::Visible; })
-				.MinValue(0)
-				.MaxValue(1000)
-				.MinSliderValue(0)
-				.MaxSliderValue(1000)
-				.ToolTipText(LOCTEXT("GraphFormatterHorizontalSpacingiToolTips", "Spacing between two layers."))
-				.Value(Settings->HorizontalSpacing)
-				.MinDesiredWidth(80)
-				.OnValueCommitted_Lambda([MutableSettings](int32 Number, ETextCommit::Type CommitInfo)
+        + SVerticalBox::Slot()
+        .Padding(2.0f)
+        [
+            SNew(SSpinBox<int32>).Visibility_Lambda([]()
+            {
+                return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Collapsed : EVisibility::Visible;
+            })
+            .MinValue(0)
+            .MaxValue(1000)
+            .MinSliderValue(0)
+            .MaxSliderValue(1000)
+            .ToolTipText(LOCTEXT("GraphFormatterHorizontalSpacingiToolTips", "Spacing between two layers."))
+            .Value(Settings->HorizontalSpacing)
+            .MinDesiredWidth(80)
+            .OnValueCommitted_Lambda([MutableSettings](int32 Number, ETextCommit::Type CommitInfo)
+            {
+                MutableSettings->HorizontalSpacing = Number;
+                MutableSettings->PostEditChange();
+                MutableSettings->SaveConfig();
+            })
+        ]
+        +SVerticalBox::Slot()
+        .Padding(2.0f)
+        [
+            SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm>>)
+            .Visibility_Lambda([]()
+            {
+                return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Collapsed : EVisibility::Visible;
+            })
+            .ContentPadding(FMargin(6.0f, 2.0f))
+            .OptionsSource(&AlgorithmOptions)
+            .ToolTipText_Lambda([]()
+            {
+                return FText::FromString("Positioning Algorithm");
+            })
+            .InitiallySelectedItem(AlgorithmOptions[SelectedAlgorithmIndex])
+            .OnSelectionChanged_Lambda([=](TSharedPtr<EGraphFormatterPositioningAlgorithm> NewOption, ESelectInfo::Type SelectInfo)
+            {
+                if (SelectInfo != ESelectInfo::Direct)
                 {
-                    MutableSettings->HorizontalSpacing = Number;
+                    MutableSettings->PositioningAlgorithm = *NewOption;
                     MutableSettings->PostEditChange();
                     MutableSettings->SaveConfig();
-                })
-            ]
-            + SVerticalBox::Slot()
-            .Padding(2.0f)
+                }
+            })
+            .OnGenerateWidget_Lambda([](TSharedPtr<EGraphFormatterPositioningAlgorithm> AlgorithmEnum)
+            {
+                return SNew(STextBlock).Text(GetEnumAsString(*AlgorithmEnum.Get()));
+            })
             [
-                SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm> >)
-				.Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Collapsed : EVisibility::Visible; })
-				.ContentPadding(FMargin(6.0f, 2.0f))
-				.OptionsSource(&AlgorithmOptions)
-				.ToolTipText_Lambda([]() { return FText::FromString("Positioning Algorithm"); })
-				.InitiallySelectedItem(AlgorithmOptions[SelectedAlgorithmIndex])
-				.OnSelectionChanged_Lambda([=](TSharedPtr<EGraphFormatterPositioningAlgorithm> NewOption, ESelectInfo::Type SelectInfo)
-                {
-                    if (SelectInfo != ESelectInfo::Direct)
-                    {
-                        MutableSettings->PositioningAlgorithm = *NewOption;
-                        MutableSettings->PostEditChange();
-                        MutableSettings->SaveConfig();
-                    }
-                })
-				.OnGenerateWidget_Lambda([](TSharedPtr<EGraphFormatterPositioningAlgorithm> AlgorithmEnum) { return SNew(STextBlock).Text(GetEnumAsString(*AlgorithmEnum.Get())); })
-                [
-                    SNew(STextBlock)
-                    .Text_Lambda([Settings]() { return GetEnumAsString(Settings->PositioningAlgorithm); })
-                ]
-            ];
+                SNew(STextBlock)
+                .Text_Lambda([Settings]() { return GetEnumAsString(Settings->PositioningAlgorithm); })
+            ]
+        ];
         ToolbarBuilder.AddWidget(HorizontalEditArea);
         ToolbarBuilder.AddWidget(VerticalEditArea);
-        ToolbarBuilder.AddToolBarButton
-        (
+        ToolbarBuilder.AddToolBarButton(
             Commands.StraightenConnections,
             NAME_None,
             TAttribute<FText>(),
@@ -291,48 +279,6 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
         );
     }
     ToolbarBuilder.EndSection();
-}
-
-void FFormatterModule::FormatGraph(FFormatterDelegates GraphDelegates)
-{
-    UEdGraph* Graph = GraphDelegates.GetGraphDelegate.Execute();
-    SGraphEditor* GraphEditor = GraphDelegates.GetGraphEditorDelegate.Execute();
-    if (!Graph || !GraphEditor)
-    {
-        return;
-    }
-    FFormatterHacker::UpdateCommentNodes(GraphEditor, Graph);
-    auto SelectedNodes = GetSelectedNodes(GraphEditor);
-    SelectedNodes = DoSelectionStrategy(Graph, SelectedNodes);
-    FFormatterHacker::ComputeNodesSizeAtRatioOne(GraphDelegates, SelectedNodes);
-    FFormatterGraph GraphData(SelectedNodes, GraphDelegates);
-    GraphData.Format();
-    FFormatterHacker::RestoreZoomLevel(GraphDelegates);
-    auto FormatData = GraphData.GetBoundMap();
-    const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
-    for (auto formatData : FormatData)
-    {
-        formatData.Key->Modify();
-        if (formatData.Key->IsA(UEdGraphNode_Comment::StaticClass()))
-        {
-            auto CommentNode = Cast<UEdGraphNode_Comment>(formatData.Key);
-            CommentNode->SetBounds(formatData.Value);
-        }
-        else
-        {
-            if (GraphDelegates.MoveTo.IsBound())
-            {
-                GraphDelegates.MoveTo.Execute(formatData.Key, formatData.Value.GetTopLeft());
-            }
-            else
-            {
-                formatData.Key->NodePosX = formatData.Value.GetTopLeft().X;
-                formatData.Key->NodePosY = formatData.Value.GetTopLeft().Y;
-            }
-        }
-    }
-    Graph->NotifyGraphChanged();
-    GraphDelegates.MarkGraphDirty.ExecuteIfBound();
 }
 
 void FFormatterModule::ToggleStraightenConnections()
@@ -387,14 +333,11 @@ void FFormatterModule::ShutdownModule()
     {
         SettingsModule->UnregisterSettings("Editor", "Plugins", "GraphFormatter");
     }
-#if (ENGINE_MINOR_VERSION >= 24 || ENGINE_MAJOR_VERSION >= 5)
     if (GEditor)
     {
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().Remove(GraphEditorDelegateHandle);
+        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().RemoveAll(this);
+        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().RemoveAll(this);
     }
-#else
-	FAssetEditorManager::Get().OnAssetOpenedInEditor().Remove(GraphEditorDelegateHandle);
-#endif
     FFormatterStyle::Shutdown();
 }
 

@@ -19,5 +19,6 @@ public:
 
     TSharedPtr<FUICommandInfo> FormatGraph;
     TSharedPtr<FUICommandInfo> StraightenConnections;
+    TSharedPtr<FUICommandInfo> PlaceBlock;
     virtual void RegisterCommands() override;
 };
