@@ -308,7 +308,11 @@ void FFormatter::SetZoomLevelTo11Scale() const
             TempZoomLevels = MoveTemp(ZoomLevels);
             ZoomLevels = MoveTemp(TopZoomLevels);
             (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
+#if (ENGINE_MAJOR_VERSION >= 5)
             NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
+#else
+            NodePanel->InvalidatePrepass();
+#endif
             auto Nodes = GetAllNodes();
             for (auto Node : Nodes)
             {
@@ -337,7 +341,11 @@ void FFormatter::RestoreZoomLevel() const
             auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
             ZoomLevels = MoveTemp(TempZoomLevels);
             (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
+#if (ENGINE_MAJOR_VERSION >= 5)
             NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
+#else
+            NodePanel->InvalidatePrepass();
+#endif
         }
     }
 }
