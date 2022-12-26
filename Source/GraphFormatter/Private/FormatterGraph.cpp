@@ -9,10 +9,10 @@
 #include "EdGraphNode_Comment.h"
 #include "EvenlyPlaceStrategy.h"
 #include "FastAndSimplePositioningStrategy.h"
+#include "Formatter.h"
 #include "FormatterSettings.h"
 #include "IPositioningStrategy.h"
 #include "PriorityPositioningStrategy.h"
-#include "Formatter.h"
 
 #include "BehaviorTree/BTNode.h"
 #include "Editor/BehaviorTreeEditor/Classes/BehaviorTreeGraphNode.h"
@@ -652,7 +652,7 @@ TArray<UEdGraphNode_Comment*> FFormatterGraph::GetSortedCommentNodes(TSet<UEdGra
 static void GetNodesConnectedRecursively(UEdGraphNode* RootNode, const TSet<UEdGraphNode*>& Excluded, TSet<UEdGraphNode*>& OutSet)
 {
     TSet<UEdGraphNode*> Set;
-    for(auto Pin : RootNode->Pins)
+    for (auto Pin : RootNode->Pins)
     {
         for (auto LinkedToPin : Pin->LinkedTo)
         {
@@ -680,9 +680,9 @@ TSet<UEdGraphNode*> FFormatterGraph::GetDirectConnected(const TSet<UEdGraphNode*
     {
         for (auto Pin : Node->Pins)
         {
-            if (Option == EInOutOption::GAN_IN && Pin->Direction == EGPD_Input ||
-                Option == EInOutOption::GAN_OUT && Pin->Direction == EGPD_Output ||
-                Option == EInOutOption::GAN_ALL)
+            if (Option == EInOutOption::EIOO_IN && Pin->Direction == EGPD_Input ||
+                Option == EInOutOption::EIOO_OUT && Pin->Direction == EGPD_Output ||
+                Option == EInOutOption::EIOO_ALL)
             {
                 for (auto LinkedPin : Pin->LinkedTo)
                 {
@@ -710,27 +710,45 @@ TSet<UEdGraphNode*> FFormatterGraph::GetNodesConnected(const TSet<UEdGraphNode*>
     return Result;
 }
 
-FVector2D FFormatterGraph::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option)
+bool FFormatterGraph::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EInOutOption Option, bool bInvert)
 {
-    for(auto Node : SelectedNodes)
+    FSlateRect Bound;
+    for (auto Node : SelectedNodes)
     {
         for (auto Pin : Node->Pins)
         {
-            if (Option == EInOutOption::GAN_IN && Pin->Direction == EGPD_Input ||
-                Option == EInOutOption::GAN_OUT && Pin->Direction == EGPD_Output ||
-                Option == EInOutOption::GAN_ALL)
+            if (FFormatter::Instance().BlueprintEditor && !FFormatter::Instance().IsExecPin(Pin))
+            {
+                continue;
+            }
+            if (Option == EInOutOption::EIOO_IN && Pin->Direction == EGPD_Input ||
+                Option == EInOutOption::EIOO_OUT && Pin->Direction == EGPD_Output ||
+                Option == EInOutOption::EIOO_ALL)
             {
                 for (auto LinkedPin : Pin->LinkedTo)
                 {
                     auto LinkedNode = LinkedPin->GetOwningNodeUnchecked();
                     if (!SelectedNodes.Contains(LinkedNode))
                     {
+                        auto Pos = FFormatter::Instance().GetNodePosition(bInvert ? Node : LinkedNode);
+                        auto PinOffset = FFormatter::Instance().GetPinOffset(bInvert ? Pin : LinkedPin);
+                        auto LinkedPos = Pos + PinOffset;
+                        FSlateRect PosZeroBound = FSlateRect::FromPointAndExtent(LinkedPos, FVector2D(0, 0));
+                        Bound = Bound.IsValid() ? Bound.Expand(PosZeroBound) : PosZeroBound;
                     }
                 }
             }
         }
     }
-    return FVector2D();
+    if (Bound.IsValid())
+    {
+        OutCenter = Bound.GetCenter();
+        return true;
+    }
+    else
+    {
+        return false;
+    }
 }
 
 FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes) const
@@ -1077,10 +1095,9 @@ void FFormatterGraph::DoLayering()
         }
         Set.Append(Layer);
         TArray<FFormatterNode*> Array = Layer.Array();
-        if (FFormatter::Instance().BehaviorTreeEditor)
+        if (FFormatter::Instance().IsVertical())
         {
             Array.Sort(BehaviorTreeNodeComparer);
-            //Array.Sort([this](const FFormatterNode& A, const FFormatterNode& B) { return BehaviorTreeNodeComparer(A, B); });
         }
         LayeredList.Add(Array);
     }
@@ -1253,8 +1270,7 @@ void FFormatterGraph::DoPositioning()
 {
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
 
-    
-    if (FFormatter::Instance().BehaviorTreeEditor)
+    if (FFormatter::Instance().IsVertical())
     {
         FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, false);
         TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
@@ -1460,7 +1476,7 @@ void FFormatterGraph::Format()
 
             if (PreBound.IsValid())
             {
-                FVector2D StartCorner = FFormatter::Instance().BehaviorTreeEditor ? PreBound.GetTopRight() : PreBound.GetBottomLeft();
+                FVector2D StartCorner = FFormatter::Instance().IsVertical() ? PreBound.GetTopRight() : PreBound.GetBottomLeft();
                 isolatedGraph->SetPosition(StartCorner);
             }
             auto Bound = isolatedGraph->GetTotalBound();
@@ -1473,7 +1489,7 @@ void FFormatterGraph::Format()
                 TotalBound = Bound;
             }
 
-            FVector2D Offset = FFormatter::Instance().BehaviorTreeEditor ? FVector2D(Settings.VerticalSpacing, 0) : FVector2D(0, Settings.VerticalSpacing);
+            FVector2D Offset = FFormatter::Instance().IsVertical() ? FVector2D(Settings.VerticalSpacing, 0) : FVector2D(0, Settings.VerticalSpacing);
             PreBound = TotalBound.OffsetBy(Offset);
         }
     }

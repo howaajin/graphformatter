@@ -118,13 +118,13 @@ public:
 
     enum class EInOutOption
     {
-        GAN_ALL,
-        GAN_IN,
-        GAN_OUT
+        EIOO_ALL,
+        EIOO_IN,
+        EIOO_OUT
     };
     static TSet<UEdGraphNode*> GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
     static TSet<UEdGraphNode*> GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
-    static FVector2D GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
+    static bool GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EInOutOption Option, bool bInvert = false);
 
     void CalculateNodesSize();
     void CalculatePinsOffset();

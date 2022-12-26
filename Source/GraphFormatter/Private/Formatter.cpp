@@ -6,6 +6,7 @@
 #include "Formatter.h"
 #include "FormatterCommands.h"
 #include "FormatterGraph.h"
+#include "FormatterSettings.h"
 
 #include "AIGraphEditor.h"
 #include "AudioEditor/Private/SoundCueEditor.h"
@@ -14,6 +15,7 @@
 #include "Editor/BehaviorTreeEditor/Private/BehaviorTreeEditor.h"
 #include "GraphEditor/Private/SGraphEditorImpl.h"
 #include "MaterialEditor/Private/MaterialEditor.h"
+#include "Math/Ray.h"
 #include "SGraphNodeComment.h"
 #include "SGraphPanel.h"
 #include "Sound/SoundCue.h"
@@ -210,6 +212,16 @@ FVector2D FFormatter::GetNodeSize(const UEdGraphNode* Node) const
     return FVector2D(Node->NodeWidth, Node->NodeHeight);
 }
 
+FVector2D FFormatter::GetNodePosition(const UEdGraphNode* Node) const
+{
+    auto GraphNode = GetWidget(Node);
+    if (GraphNode != nullptr)
+    {
+        return GraphNode->GetPosition();
+    }
+    return FVector2D();
+}
+
 FVector2D FFormatter::GetPinOffset(const UEdGraphPin* Pin) const
 {
     auto GraphNode = GetWidget(Pin->GetOwningNodeUnchecked());
@@ -223,6 +235,43 @@ FVector2D FFormatter::GetPinOffset(const UEdGraphPin* Pin) const
         }
     }
     return FVector2D::ZeroVector;
+}
+
+FSlateRect FFormatter::GetNodesBound(const TSet<UEdGraphNode*> Nodes) const
+{
+    FSlateRect Bound;
+    for (auto Node : Nodes)
+    {
+        FVector2D Pos = GetNodePosition(Node);
+        FVector2D Size = GetNodeSize(Node);
+        FSlateRect NodeBound = FSlateRect::FromPointAndExtent(Pos, Size);
+        Bound = Bound.IsValid() ? Bound.Expand(NodeBound) : NodeBound;
+    }
+    return Bound;
+}
+
+bool FFormatter::IsExecPin(const UEdGraphPin* Pin) const
+{
+    return Pin->PinType.PinCategory == "Exec";
+}
+
+void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset)
+{
+    UEdGraph* Graph = CurrentEditor->GetCurrentGraph();
+    if (!Graph || !CurrentEditor)
+    {
+        return;
+    }
+    if (Offset.X == 0 && Offset.Y == 0)
+    {
+        return;
+    }
+    for (auto Node : Nodes)
+    {
+        auto WidgetNode = GetWidget(Node);
+        SGraphPanel::SNode::FNodeSet Filter;
+        WidgetNode->MoveTo(WidgetNode->GetPosition() + Offset, Filter, true);
+    }
 }
 
 void FFormatter::UpdateCommentNodes() const
@@ -431,7 +480,7 @@ void FFormatter::Format() const
     Graph->NotifyGraphChanged();
 }
 
-void FFormatter::PlaceBlock() const
+void FFormatter::PlaceBlock()
 {
     UEdGraph* Graph = CurrentEditor->GetCurrentGraph();
     if (!Graph || !CurrentEditor)
@@ -439,9 +488,49 @@ void FFormatter::PlaceBlock() const
         return;
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
-    auto ConnectedNodes = FFormatterGraph::GetNodesConnected(SelectedNodes, FFormatterGraph::EInOutOption::GAN_OUT);
-    for (auto Node : ConnectedNodes)
+    auto ConnectedNodesLeft = FFormatterGraph::GetNodesConnected(SelectedNodes, FFormatterGraph::EInOutOption::EIOO_IN);
+    FVector2D ConnectCenter;
+    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+    const FScopedTransaction Transaction(FFormatterCommands::Get().PlaceBlock->GetLabel());
+    if (FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_IN))
     {
-        CurrentEditor->SetNodeSelection(Node, true);
+        auto Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
+        auto Direction = IsVertical() ? FVector(0, 1, 0) : FVector(1, 0, 0);
+        auto RightRay = FRay(Center, Direction, true);
+        FSlateRect Bound = GetNodesBound(ConnectedNodesLeft);
+        auto RightBound = IsVertical() ? FVector(0, Bound.Bottom, 0) : FVector(Bound.Right, 0, 0);
+        auto LinkedCenter3D = RightRay.PointAt(RightRay.GetParameter(RightBound));
+        auto LinkedCenterTo = FVector2D(LinkedCenter3D) + (IsVertical() ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
+        FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_IN, true);
+        Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
+        Direction = IsVertical() ? FVector(0, -1, 0) : FVector(-1, 0, 0);
+        auto LeftRay = FRay(Center, Direction, true);
+        Bound = GetNodesBound(SelectedNodes);
+        auto LeftBound = IsVertical() ? FVector(0, Bound.Top, 0) : FVector(Bound.Left, 0, 0);
+        LinkedCenter3D = LeftRay.PointAt(LeftRay.GetParameter(LeftBound));
+        auto LinkedCenterFrom = FVector2D(LinkedCenter3D);
+        FVector2D Offset = LinkedCenterTo - LinkedCenterFrom;
+        Translate(SelectedNodes, Offset);
+    }
+    auto ConnectedNodesRight = FFormatterGraph::GetNodesConnected(SelectedNodes, FFormatterGraph::EInOutOption::EIOO_OUT);
+    if (FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_OUT))
+    {
+        auto Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
+        auto Direction = IsVertical() ? FVector(0, -1, 0) : FVector(-1, 0, 0);
+        auto LeftRay = FRay(Center, Direction, true);
+        FSlateRect Bound = GetNodesBound(ConnectedNodesRight);
+        auto LeftBound = IsVertical() ? FVector(0, Bound.Top, 0) : FVector(Bound.Left, 0, 0);
+        auto LinkedCenter3D = LeftRay.PointAt(LeftRay.GetParameter(LeftBound));
+        auto LinkedCenterTo = FVector2D(LinkedCenter3D) - (IsVertical() ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
+        FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_OUT, true);
+        Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
+        Direction = IsVertical() ? FVector(0, 1, 0) : FVector(1, 0, 0);
+        auto RightRay = FRay(Center, Direction, true);
+        Bound = GetNodesBound(SelectedNodes);
+        auto RightBound = IsVertical() ? FVector(0, Bound.Bottom, 0) : FVector(Bound.Right, 0, 0);
+        LinkedCenter3D = RightRay.PointAt(RightRay.GetParameter(RightBound));
+        auto LinkedCenterFrom = FVector2D(LinkedCenter3D);
+        FVector2D Offset = LinkedCenterFrom - LinkedCenterTo;
+        Translate(ConnectedNodesRight, Offset);
     }
 }

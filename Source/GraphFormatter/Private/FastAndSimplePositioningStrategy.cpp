@@ -208,7 +208,7 @@ void FFastAndSimplePositioningStrategy::PlaceBlock(FFormatterNode* BlockRoot)
                 {
                     AdjacencyHeight = Adjacency->Size.Y;
                     NodeHeight = Node->Size.Y;
-                    Spacing = Settings.VerticalSpacing;
+                    Spacing = Settings.HorizontalSpacing;
                 }
                 else
                 {
