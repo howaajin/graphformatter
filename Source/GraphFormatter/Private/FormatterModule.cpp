@@ -34,7 +34,6 @@ class FFormatterModule : public IGraphFormatterModule
     virtual void StartupModule() override;
     virtual void ShutdownModule() override;
     void HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance);
-    void HandleEditorWidgetConstructed(UObject* Object);
     void FillToolbar(FToolBarBuilder& ToolbarBuilder);
     void ToggleStraightenConnections();
     bool IsStraightenConnectionsEnabled();
@@ -64,7 +63,6 @@ void FFormatterModule::StartupModule()
     FFormatterCommands::Register();
     if(GEditor)
     {
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().AddRaw(this, &FFormatterModule::HandleEditorWidgetConstructed);
         GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().AddRaw(this, &FFormatterModule::HandleAssetEditorOpened);
     }
     AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)));
@@ -75,7 +73,6 @@ void FFormatterModule::StartupModule()
 
 void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance)
 {
-    FFormatter::Instance().SetCurrentEditor(Object, Instance);
     if (FFormatter::Instance().IsAssetSupported(Object))
     {
         const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
@@ -88,12 +85,20 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
         }
         ToolkitCommands->MapAction(
             Commands.FormatGraph,
-            FExecuteAction::CreateLambda([] { FFormatter::Instance().Format(); }),
+            FExecuteAction::CreateLambda([Object, Instance]
+            {
+                FFormatter::Instance().SetCurrentEditor(Object, Instance);
+                FFormatter::Instance().Format();
+            }),
             FCanExecuteAction()
         );
         ToolkitCommands->MapAction(
             Commands.PlaceBlock,
-            FExecuteAction::CreateLambda([] { FFormatter::Instance().PlaceBlock(); }),
+            FExecuteAction::CreateLambda([Object, Instance]
+            {
+                FFormatter::Instance().SetCurrentEditor(Object, Instance);
+                FFormatter::Instance().PlaceBlock();
+            }),
             FCanExecuteAction()
         );
         if (!Settings->DisableToolbar)
@@ -115,17 +120,6 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
                 FCanExecuteAction(),
                 FIsActionChecked::CreateRaw(this, &FFormatterModule::IsStraightenConnectionsEnabled)
             );
-        }
-    }
-}
-
-void FFormatterModule::HandleEditorWidgetConstructed(UObject* Object)
-{
-    if(GEditor)
-    {
-        if(IAssetEditorInstance* Instance = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->FindEditorForAsset(Object, false))
-        {
-            FFormatter::Instance().SetCurrentEditor(Object, Instance);
         }
     }
 }
