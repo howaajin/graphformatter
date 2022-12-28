@@ -717,7 +717,7 @@ bool FFormatterGraph::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedN
     {
         for (auto Pin : Node->Pins)
         {
-            if (FFormatter::Instance().BlueprintEditor && !FFormatter::Instance().IsExecPin(Pin))
+            if (FFormatter::Instance().IsBlueprint && !FFormatter::Instance().IsExecPin(Pin))
             {
                 continue;
             }
@@ -1095,7 +1095,7 @@ void FFormatterGraph::DoLayering()
         }
         Set.Append(Layer);
         TArray<FFormatterNode*> Array = Layer.Array();
-        if (FFormatter::Instance().IsVertical())
+        if (FFormatter::Instance().IsBehaviorTree)
         {
             Array.Sort(BehaviorTreeNodeComparer);
         }
@@ -1270,7 +1270,7 @@ void FFormatterGraph::DoPositioning()
 {
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
 
-    if (FFormatter::Instance().IsVertical())
+    if (FFormatter::Instance().IsVerticalLayout)
     {
         FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, false);
         TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
@@ -1476,7 +1476,7 @@ void FFormatterGraph::Format()
 
             if (PreBound.IsValid())
             {
-                FVector2D StartCorner = FFormatter::Instance().IsVertical() ? PreBound.GetTopRight() : PreBound.GetBottomLeft();
+                FVector2D StartCorner = FFormatter::Instance().IsVerticalLayout ? PreBound.GetTopRight() : PreBound.GetBottomLeft();
                 isolatedGraph->SetPosition(StartCorner);
             }
             auto Bound = isolatedGraph->GetTotalBound();
@@ -1489,7 +1489,7 @@ void FFormatterGraph::Format()
                 TotalBound = Bound;
             }
 
-            FVector2D Offset = FFormatter::Instance().IsVertical() ? FVector2D(Settings.VerticalSpacing, 0) : FVector2D(0, Settings.VerticalSpacing);
+            FVector2D Offset = FFormatter::Instance().IsVerticalLayout ? FVector2D(Settings.VerticalSpacing, 0) : FVector2D(0, Settings.VerticalSpacing);
             PreBound = TotalBound.OffsetBy(Offset);
         }
     }
@@ -1511,7 +1511,7 @@ void FFormatterGraph::Format()
             RemoveCycle();
             DoLayering();
             AddDummyNodes();
-            if (!FFormatter::Instance().BehaviorTreeEditor)
+            if (!FFormatter::Instance().IsBehaviorTree)
             {
                 DoOrderingSweep();
             }

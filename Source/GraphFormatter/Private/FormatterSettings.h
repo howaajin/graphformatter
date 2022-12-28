@@ -25,6 +25,10 @@ public:
 
     UFormatterSettings();
 
+    /** All Asset types supported */
+    UPROPERTY(config, EditAnywhere, Category = "Options")
+    TMap<FString, bool> SupportedAssetTypes;
+
     /** Toolbar toggle */
     UPROPERTY(config, EditAnywhere, Category = "Options")
     bool DisableToolbar;

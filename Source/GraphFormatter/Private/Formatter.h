@@ -15,16 +15,16 @@ class FBehaviorTreeEditor;
 
 struct FFormatter
 {
-    void SetCurrentEditor(UObject* Object, IAssetEditorInstance* Instance);
+    bool IsVerticalLayout = false;
+    bool IsBehaviorTree = false;
+    bool IsBlueprint = false;
+
+    void SetCurrentEditor(SGraphEditor* Editor, UObject* Object);
+
     bool IsAssetSupported(UObject* Object) const;
 
-    inline bool IsVertical() const
-    {
-        return BehaviorTreeEditor != nullptr;
-    }
-
-
-    SGraphEditor* GetCurrentEditor() const;
+    SGraphEditor* FindGraphEditor() const;
+    bool CaptureGraphEditor() ;
     SGraphPanel* GetCurrentPanel() const;
     SGraphNode* GetWidget(const UEdGraphNode* Node) const;
     TSet<UEdGraphNode*> GetAllNodes() const;
@@ -47,11 +47,6 @@ struct FFormatter
         static FFormatter Context;
         return Context;
     }
-
-    FBlueprintEditor* BlueprintEditor = nullptr;
-    FMaterialEditor* MaterialEditor = nullptr;
-    FSoundCueEditor* SoundCueEditor = nullptr;
-    FBehaviorTreeEditor* BehaviorTreeEditor = nullptr;
 
 private:
     FFormatter() {}

@@ -7,6 +7,7 @@
 #include "FormatterCommands.h"
 #include "FormatterGraph.h"
 #include "FormatterSettings.h"
+#include "FormatterLog.h"
 
 #include "AIGraphEditor.h"
 #include "AudioEditor/Private/SoundCueEditor.h"
@@ -18,7 +19,6 @@
 #include "Math/Ray.h"
 #include "SGraphNodeComment.h"
 #include "SGraphPanel.h"
-#include "Sound/SoundCue.h"
 
 #include "BlueprintEditor.h"
 #include "PrivateAccessor.h"
@@ -82,72 +82,81 @@ SGraphEditor* GetGraphEditor(const FBehaviorTreeEditor* Editor)
     return nullptr;
 }
 
-void FFormatter::SetCurrentEditor(UObject* Object, IAssetEditorInstance* Instance)
+void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
 {
-    if (Cast<UBlueprint>(Object) || Cast<UMaterial>(Object) || Cast<USoundCue>(Object) || Cast<UBehaviorTree>(Object))
-    {
-        BlueprintEditor = nullptr;
-        MaterialEditor = nullptr;
-        SoundCueEditor = nullptr;
-        BehaviorTreeEditor = nullptr;
-    }
-
-    if (Cast<UBlueprint>(Object))
-    {
-        BlueprintEditor = StaticCast<FBlueprintEditor*>(Instance);
-        if (BlueprintEditor)
-        {
-            CurrentEditor = GetGraphEditor(BlueprintEditor);
-            return;
-        }
-    }
-    if (Cast<UMaterial>(Object))
-    {
-        MaterialEditor = StaticCast<FMaterialEditor*>(Instance);
-        if (MaterialEditor)
-        {
-            CurrentEditor = GetGraphEditor(MaterialEditor);
-            return;
-        }
-    }
-    if (Cast<USoundCue>(Object))
-    {
-        SoundCueEditor = StaticCast<FSoundCueEditor*>(Instance);
-        if (SoundCueEditor)
-        {
-            CurrentEditor = GetGraphEditor(SoundCueEditor);
-            return;
-        }
-    }
+    CurrentEditor = Editor;
+    IsVerticalLayout = false;
+    IsBehaviorTree = false;
+    IsBlueprint = false;
     if (Cast<UBehaviorTree>(Object))
     {
-        BehaviorTreeEditor = StaticCast<FBehaviorTreeEditor*>(Instance);
-        if (BehaviorTreeEditor)
-        {
-            CurrentEditor = GetGraphEditor(BehaviorTreeEditor);
-            return;
-        }
+        IsVerticalLayout = true;
+        IsBehaviorTree = true;
+    }
+    if (Cast<UBlueprint>(Object))
+    {
+        IsBlueprint = true;
     }
 }
 
 bool FFormatter::IsAssetSupported(UObject* Object) const
 {
-    if (Cast<UBlueprint>(Object) ||
-        Cast<UMaterial>(Object) ||
-        Cast<USoundCue>(Object) ||
-        Cast<UBehaviorTree>(Object))
-    {
-        return true;
-    }
-    else
-    {
-        return false;
-    }
+    const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+    return Settings->SupportedAssetTypes.Contains(Object->GetClass()->GetName());
 }
 
-SGraphEditor* FFormatter::GetCurrentEditor() const
+/** Matches widgets by InName */
+struct FWidgetTypeMatcher
 {
-    return CurrentEditor;
+    FWidgetTypeMatcher(const FName& InType)
+        : TypeName(InType)
+    {}
+
+    bool IsMatch(const TSharedRef<const SWidget>& InWidget) const
+    {
+        return TypeName == InWidget->GetType();
+    }
+
+    const FName& TypeName;
+};
+
+SGraphEditor* FFormatter::FindGraphEditor() const
+{
+    FSlateApplication& Application = FSlateApplication::Get();
+    auto ActiveWindow = Application.GetActiveTopLevelWindow();
+    if (!ActiveWindow.IsValid())
+    {
+        return nullptr;
+    }
+    FGeometry InnerWindowGeometry = ActiveWindow->GetWindowGeometryInWindow();
+    FArrangedChildren JustWindow(EVisibility::Visible);
+    JustWindow.AddWidget(FArrangedWidget(ActiveWindow.ToSharedRef(), InnerWindowGeometry));
+
+    FWidgetPath WidgetPath(ActiveWindow.ToSharedRef(), JustWindow);
+    if (WidgetPath.ExtendPathTo(FWidgetTypeMatcher("SGraphEditor"), EVisibility::Visible))
+    {
+        return StaticCast<SGraphEditor*>(&WidgetPath.GetLastWidget().Get());
+    }
+    return nullptr;
+}
+
+bool FFormatter::CaptureGraphEditor()
+{
+    FSlateApplication& Application = FSlateApplication::Get();
+    FWidgetPath WidgetPath = Application.LocateWindowUnderMouse(Application.GetCursorPos(), Application.GetInteractiveTopLevelWindows());
+    UE_LOG(LogTemp, Warning, TEXT("%s"), *WidgetPath.Widgets[0].Widget.Get().ToString());
+    for (int i = WidgetPath.Widgets.Num() - 1; i >= 0; i--)
+    {
+        if (WidgetPath.Widgets[i].Widget->GetTypeAsString() == "SGraphEditor")
+        {
+            CurrentEditor = StaticCast<SGraphEditor*>(&WidgetPath.Widgets[i].Widget.Get());
+            if (CurrentEditor)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 
 SGraphPanel* FFormatter::GetCurrentPanel() const
@@ -473,10 +482,6 @@ void FFormatter::Format() const
             formatData.Key->NodePosY = formatData.Value.GetTopLeft().Y;
         }
     }
-    if (MaterialEditor)
-    {
-        MaterialEditor->bMaterialDirty = true;
-    }
     Graph->NotifyGraphChanged();
 }
 
@@ -495,18 +500,18 @@ void FFormatter::PlaceBlock()
     if (FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_IN))
     {
         auto Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
-        auto Direction = IsVertical() ? FVector(0, 1, 0) : FVector(1, 0, 0);
+        auto Direction = IsVerticalLayout ? FVector(0, 1, 0) : FVector(1, 0, 0);
         auto RightRay = FRay(Center, Direction, true);
         FSlateRect Bound = GetNodesBound(ConnectedNodesLeft);
-        auto RightBound = IsVertical() ? FVector(0, Bound.Bottom, 0) : FVector(Bound.Right, 0, 0);
+        auto RightBound = IsVerticalLayout ? FVector(0, Bound.Bottom, 0) : FVector(Bound.Right, 0, 0);
         auto LinkedCenter3D = RightRay.PointAt(RightRay.GetParameter(RightBound));
-        auto LinkedCenterTo = FVector2D(LinkedCenter3D) + (IsVertical() ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
+        auto LinkedCenterTo = FVector2D(LinkedCenter3D) + (IsVerticalLayout ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
         FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_IN, true);
         Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
-        Direction = IsVertical() ? FVector(0, -1, 0) : FVector(-1, 0, 0);
+        Direction = IsVerticalLayout ? FVector(0, -1, 0) : FVector(-1, 0, 0);
         auto LeftRay = FRay(Center, Direction, true);
         Bound = GetNodesBound(SelectedNodes);
-        auto LeftBound = IsVertical() ? FVector(0, Bound.Top, 0) : FVector(Bound.Left, 0, 0);
+        auto LeftBound = IsVerticalLayout ? FVector(0, Bound.Top, 0) : FVector(Bound.Left, 0, 0);
         LinkedCenter3D = LeftRay.PointAt(LeftRay.GetParameter(LeftBound));
         auto LinkedCenterFrom = FVector2D(LinkedCenter3D);
         FVector2D Offset = LinkedCenterTo - LinkedCenterFrom;
@@ -516,18 +521,18 @@ void FFormatter::PlaceBlock()
     if (FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_OUT))
     {
         auto Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
-        auto Direction = IsVertical() ? FVector(0, -1, 0) : FVector(-1, 0, 0);
+        auto Direction = IsVerticalLayout ? FVector(0, -1, 0) : FVector(-1, 0, 0);
         auto LeftRay = FRay(Center, Direction, true);
         FSlateRect Bound = GetNodesBound(ConnectedNodesRight);
-        auto LeftBound = IsVertical() ? FVector(0, Bound.Top, 0) : FVector(Bound.Left, 0, 0);
+        auto LeftBound = IsVerticalLayout ? FVector(0, Bound.Top, 0) : FVector(Bound.Left, 0, 0);
         auto LinkedCenter3D = LeftRay.PointAt(LeftRay.GetParameter(LeftBound));
-        auto LinkedCenterTo = FVector2D(LinkedCenter3D) - (IsVertical() ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
+        auto LinkedCenterTo = FVector2D(LinkedCenter3D) - (IsVerticalLayout ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
         FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_OUT, true);
         Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
-        Direction = IsVertical() ? FVector(0, 1, 0) : FVector(1, 0, 0);
+        Direction = IsVerticalLayout ? FVector(0, 1, 0) : FVector(1, 0, 0);
         auto RightRay = FRay(Center, Direction, true);
         Bound = GetNodesBound(SelectedNodes);
-        auto RightBound = IsVertical() ? FVector(0, Bound.Bottom, 0) : FVector(Bound.Right, 0, 0);
+        auto RightBound = IsVerticalLayout ? FVector(0, Bound.Bottom, 0) : FVector(Bound.Right, 0, 0);
         LinkedCenter3D = RightRay.PointAt(RightRay.GetParameter(RightBound));
         auto LinkedCenterFrom = FVector2D(LinkedCenter3D);
         FVector2D Offset = LinkedCenterFrom - LinkedCenterTo;

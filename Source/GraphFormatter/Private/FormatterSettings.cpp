@@ -6,11 +6,20 @@
 #include "FormatterSettings.h"
 
 UFormatterSettings::UFormatterSettings()
-    : DisableToolbar(false)
-      , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
-      , CommentBorder(45)
-      , HorizontalSpacing(100)
-      , VerticalSpacing(80)
-      , MaxOrderingIterations(10)
+    : SupportedAssetTypes({
+            {"Blueprint", true},
+            {"BehaviorTree", true},
+            {"Material", true},
+            {"SoundCue", true},
+            {"WidgetBlueprint", true},
+            {"NiagaraScript", true},
+            {"MetaSoundSource", true},
+        })
+    , DisableToolbar(false)
+    , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
+    , CommentBorder(45)
+    , HorizontalSpacing(100)
+    , VerticalSpacing(80)
+    , MaxOrderingIterations(10)
 {
 }
