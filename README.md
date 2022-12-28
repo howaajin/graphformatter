@@ -7,7 +7,7 @@ Graph Formatter is an Unreal Engine plugin that can arrange graph nodes automati
 ## Installing
 ###### Install From Source
 
-Clone or download this repository to the "[root of your project]/Plugins/GraphFormatter" and restart Editor.  
+Clone or [download](https://github.com/howaajin/graphformatter/archive/refs/heads/master.zip) this repository to the "[root of your project]/Plugins/GraphFormatter" and restart Editor.  
 Note: git head version only support latest engine version.
 
 ###### Install From Marketplace 
