@@ -25,6 +25,10 @@ public:
 
     UFormatterSettings();
 
+    /** Enable auto detect Graph Editor */
+    UPROPERTY(config, EditAnywhere, Category = "Options")
+    bool AutoDetectGraphEditor;
+
     /** All Asset types supported */
     UPROPERTY(config, EditAnywhere, Category = "Options")
     TMap<FString, bool> SupportedAssetTypes;

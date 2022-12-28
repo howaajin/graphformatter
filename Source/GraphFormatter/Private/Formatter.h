@@ -23,8 +23,9 @@ struct FFormatter
 
     bool IsAssetSupported(UObject* Object) const;
 
-    SGraphEditor* FindGraphEditor() const;
-    bool CaptureGraphEditor() ;
+    SGraphEditor* FindGraphEditorForTopLevelWindow() const;
+    SGraphEditor* FindGraphEditorByCursor() const;
+
     SGraphPanel* GetCurrentPanel() const;
     SGraphNode* GetWidget(const UEdGraphNode* Node) const;
     TSet<UEdGraphNode*> GetAllNodes() const;

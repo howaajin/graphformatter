@@ -6,14 +6,16 @@
 #include "FormatterSettings.h"
 
 UFormatterSettings::UFormatterSettings()
-    : SupportedAssetTypes({
-            {"Blueprint", true},
-            {"BehaviorTree", true},
-            {"Material", true},
-            {"SoundCue", true},
-            {"WidgetBlueprint", true},
-            {"NiagaraScript", true},
-            {"MetaSoundSource", true},
+    : AutoDetectGraphEditor(false)
+    , SupportedAssetTypes({
+                {"Blueprint", true},
+                {"AnimBlueprint", true},
+                {"WidgetBlueprint", true},
+                {"BehaviorTree", true},
+                {"Material", true},
+                {"SoundCue", true},
+                {"NiagaraScript", true},
+                {"MetaSoundSource", true},
         })
     , DisableToolbar(false)
     , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)

@@ -120,7 +120,7 @@ struct FWidgetTypeMatcher
     const FName& TypeName;
 };
 
-SGraphEditor* FFormatter::FindGraphEditor() const
+SGraphEditor* FFormatter::FindGraphEditorForTopLevelWindow() const
 {
     FSlateApplication& Application = FSlateApplication::Get();
     auto ActiveWindow = Application.GetActiveTopLevelWindow();
@@ -140,23 +140,18 @@ SGraphEditor* FFormatter::FindGraphEditor() const
     return nullptr;
 }
 
-bool FFormatter::CaptureGraphEditor()
+SGraphEditor* FFormatter::FindGraphEditorByCursor() const
 {
     FSlateApplication& Application = FSlateApplication::Get();
     FWidgetPath WidgetPath = Application.LocateWindowUnderMouse(Application.GetCursorPos(), Application.GetInteractiveTopLevelWindows());
-    UE_LOG(LogTemp, Warning, TEXT("%s"), *WidgetPath.Widgets[0].Widget.Get().ToString());
     for (int i = WidgetPath.Widgets.Num() - 1; i >= 0; i--)
     {
         if (WidgetPath.Widgets[i].Widget->GetTypeAsString() == "SGraphEditor")
         {
-            CurrentEditor = StaticCast<SGraphEditor*>(&WidgetPath.Widgets[i].Widget.Get());
-            if (CurrentEditor)
-            {
-                return true;
-            }
+            return StaticCast<SGraphEditor*>(&WidgetPath.Widgets[i].Widget.Get());
         }
     }
-    return false;
+    return nullptr;
 }
 
 SGraphPanel* FFormatter::GetCurrentPanel() const
@@ -538,4 +533,5 @@ void FFormatter::PlaceBlock()
         FVector2D Offset = LinkedCenterFrom - LinkedCenterTo;
         Translate(ConnectedNodesRight, Offset);
     }
+    Graph->NotifyGraphChanged();
 }

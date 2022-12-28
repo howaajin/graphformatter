@@ -32,6 +32,7 @@ class FFormatterModule : public IGraphFormatterModule
     void FillToolbar(FToolBarBuilder& ToolbarBuilder);
     void ToggleStraightenConnections();
     bool IsStraightenConnectionsEnabled() const;
+    SGraphEditor* FindEditorForObject(UObject* Object) const;
     FDelegateHandle GraphEditorDelegateHandle;
     TArray<TSharedPtr<EGraphFormatterPositioningAlgorithm>> AlgorithmOptions;
     TMap<UObject*, SGraphEditor*> ObjectToWidget;
@@ -86,7 +87,7 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
             Commands.FormatGraph,
             FExecuteAction::CreateLambda([this, Object]
             {
-                if (SGraphEditor* Editor = ObjectToWidget.FindRef(Object))
+                if (SGraphEditor* Editor = FindEditorForObject(Object))
                 {
                     FFormatter::Instance().SetCurrentEditor(Editor, Object);
                     FFormatter::Instance().Format();
@@ -98,7 +99,7 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
             Commands.PlaceBlock,
             FExecuteAction::CreateLambda([this, Object]
             {
-                if (SGraphEditor* Editor = ObjectToWidget.FindRef(Object))
+                if (SGraphEditor* Editor = FindEditorForObject(Object))
                 {
                     FFormatter::Instance().SetCurrentEditor(Editor, Object);
                     FFormatter::Instance().PlaceBlock();
@@ -133,11 +134,24 @@ void FFormatterModule::HandleEditorWidgetCreated(UObject* Object)
 {
     if (FFormatter::Instance().IsAssetSupported(Object))
     {
-        if (auto Editor = FFormatter::Instance().FindGraphEditor())
+        if (auto Editor = FFormatter::Instance().FindGraphEditorForTopLevelWindow())
         {
             ObjectToWidget.Add(Object, Editor);
         }
     }
+    else
+    {
+        const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+        if (Settings->AutoDetectGraphEditor)
+        {
+            if (auto Editor = FFormatter::Instance().FindGraphEditorForTopLevelWindow())
+            {
+                UFormatterSettings* MutableSettings = GetMutableDefault<UFormatterSettings>();
+                MutableSettings->SupportedAssetTypes.Add(Object->GetClass()->GetName());
+            }
+        }
+    }
+
 }
 
 void FFormatterModule::HandleAssetEditorClosed(UObject* Object, EAssetEditorCloseReason Reason)
@@ -342,6 +356,23 @@ bool FFormatterModule::IsStraightenConnectionsEnabled() const
         return true;
     }
     return false;
+}
+
+SGraphEditor* FFormatterModule::FindEditorForObject(UObject* Object) const
+{
+    if (SGraphEditor* Editor = ObjectToWidget.FindRef(Object))
+    {
+        return Editor;
+    }
+    else
+    {
+        Editor = FFormatter::Instance().FindGraphEditorByCursor();
+        if (!Editor)
+        {
+            return FFormatter::Instance().FindGraphEditorForTopLevelWindow();
+        }
+        return Editor;
+    }
 }
 
 void FFormatterModule::ShutdownModule()
