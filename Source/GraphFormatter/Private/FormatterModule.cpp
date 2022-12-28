@@ -329,7 +329,6 @@ void FFormatterModule::ShutdownModule()
     }
     if (GEditor)
     {
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().RemoveAll(this);
         GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().RemoveAll(this);
     }
     FFormatterStyle::Shutdown();
