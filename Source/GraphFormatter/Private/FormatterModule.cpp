@@ -147,7 +147,7 @@ void FFormatterModule::HandleEditorWidgetCreated(UObject* Object)
             if (auto Editor = FFormatter::Instance().FindGraphEditorForTopLevelWindow())
             {
                 UFormatterSettings* MutableSettings = GetMutableDefault<UFormatterSettings>();
-                MutableSettings->SupportedAssetTypes.Add(Object->GetClass()->GetName());
+                MutableSettings->SupportedAssetTypes.Add(Object->GetClass()->GetName(), true);
             }
         }
     }

@@ -21,7 +21,7 @@ struct FFormatter
 
     void SetCurrentEditor(SGraphEditor* Editor, UObject* Object);
 
-    bool IsAssetSupported(UObject* Object) const;
+    bool IsAssetSupported(const UObject* Object) const;
 
     SGraphEditor* FindGraphEditorForTopLevelWindow() const;
     SGraphEditor* FindGraphEditorByCursor() const;

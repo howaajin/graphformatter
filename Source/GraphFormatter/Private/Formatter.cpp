@@ -99,10 +99,14 @@ void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
     }
 }
 
-bool FFormatter::IsAssetSupported(UObject* Object) const
+bool FFormatter::IsAssetSupported(const UObject* Object) const
 {
     const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
-    return Settings->SupportedAssetTypes.Contains(Object->GetClass()->GetName());
+    if (const bool* Enabled = Settings->SupportedAssetTypes.Find(Object->GetClass()->GetName()))
+    {
+        return Enabled != nullptr && *Enabled;
+    }
+    return false;
 }
 
 /** Matches widgets by InName */
