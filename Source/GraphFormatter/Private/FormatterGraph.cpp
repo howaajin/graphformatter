@@ -871,11 +871,11 @@ FFormatterNode* FFormatterGraph::FindSinkNode() const
 FFormatterNode* FFormatterGraph::FindMedianNode() const
 {
     FFormatterNode* Result = nullptr;
-    int32 MaxDegreeDiff = 0;
+    int32 MaxDegreeDiff = -INT32_MAX;
     for (auto Node : Nodes)
     {
-        const int32 DegreeDiff = Node->OutEdges.Num() - Node->InEdges.Num();
-        if (DegreeDiff >= MaxDegreeDiff)
+        const int32 DegreeDiff = Node->InEdges.Num() - Node->OutEdges.Num();
+        if (DegreeDiff > MaxDegreeDiff)
         {
             MaxDegreeDiff = DegreeDiff;
             Result = Node;
