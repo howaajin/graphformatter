@@ -462,23 +462,23 @@ void FFormatter::Format() const
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
     SelectedNodes = DoSelectionStrategy(Graph, SelectedNodes);
     SetZoomLevelTo11Scale();
-    FFormatterGraph GraphData(SelectedNodes);
-    GraphData.Format();
+    FFormatterGraph FormatterGraph(SelectedNodes);
+    FormatterGraph.Format();
     RestoreZoomLevel();
-    auto FormatData = GraphData.GetBoundMap();
+    auto BoundMap = FormatterGraph.GetBoundMap();
     const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
-    for (auto formatData : FormatData)
+    for (auto NodeRectPair : BoundMap)
     {
-        formatData.Key->Modify();
-        if (formatData.Key->IsA(UEdGraphNode_Comment::StaticClass()))
+        NodeRectPair.Key->Modify();
+        if (NodeRectPair.Key->IsA(UEdGraphNode_Comment::StaticClass()))
         {
-            auto CommentNode = Cast<UEdGraphNode_Comment>(formatData.Key);
-            CommentNode->SetBounds(formatData.Value);
+            auto CommentNode = Cast<UEdGraphNode_Comment>(NodeRectPair.Key);
+            CommentNode->SetBounds(NodeRectPair.Value);
         }
         else
         {
-            formatData.Key->NodePosX = formatData.Value.GetTopLeft().X;
-            formatData.Key->NodePosY = formatData.Value.GetTopLeft().Y;
+            NodeRectPair.Key->NodePosX = NodeRectPair.Value.GetTopLeft().X;
+            NodeRectPair.Key->NodePosY = NodeRectPair.Value.GetTopLeft().Y;
         }
     }
     Graph->NotifyGraphChanged();

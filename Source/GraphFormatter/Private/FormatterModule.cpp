@@ -76,9 +76,9 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
     if (FFormatter::Instance().IsAssetSupported(Object))
     {
         const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
-        FAssetEditorToolkit* assetEditorToolkit = StaticCast<FAssetEditorToolkit*>(Instance);
+        FAssetEditorToolkit* AssetEditorToolkit = StaticCast<FAssetEditorToolkit*>(Instance);
         const FFormatterCommands& Commands = FFormatterCommands::Get();
-        TSharedRef<FUICommandList> ToolkitCommands = assetEditorToolkit->GetToolkitCommands();
+        TSharedRef<FUICommandList> ToolkitCommands = AssetEditorToolkit->GetToolkitCommands();
         if (ToolkitCommands->IsActionMapped(Commands.FormatGraph))
         {
             return;
@@ -110,7 +110,7 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
         if (!Settings->DisableToolbar)
         {
             TSharedPtr<FExtender> Extender = FAssetEditorToolkit::GetSharedToolBarExtensibilityManager()->GetAllExtenders();
-            assetEditorToolkit->AddToolbarExtender(Extender);
+            AssetEditorToolkit->AddToolbarExtender(Extender);
             Extender->AddToolBarExtension(
                 "Asset",
                 EExtensionHook::After,
@@ -184,6 +184,7 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
     const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
     UFormatterSettings* MutableSettings = GetMutableDefault<UFormatterSettings>();
     const FFormatterCommands& Commands = FFormatterCommands::Get();
+    // clang-format off
     ToolbarBuilder.BeginSection("GraphFormatter");
     {
         TSharedPtr<SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm>>> AlgorithmComboBox;
@@ -310,6 +311,7 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
             FName(TEXT("GraphFormatter"))
         );
     }
+    // clang-format on
     ToolbarBuilder.EndSection();
 }
 
