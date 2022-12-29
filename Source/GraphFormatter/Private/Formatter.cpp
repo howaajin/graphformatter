@@ -9,78 +9,11 @@
 #include "FormatterSettings.h"
 #include "FormatterLog.h"
 
-#include "AIGraphEditor.h"
-#include "AudioEditor/Private/SoundCueEditor.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "EdGraphNode_Comment.h"
-#include "Editor/BehaviorTreeEditor/Private/BehaviorTreeEditor.h"
-#include "GraphEditor/Private/SGraphEditorImpl.h"
-#include "MaterialEditor/Private/MaterialEditor.h"
 #include "Math/Ray.h"
 #include "SGraphNodeComment.h"
 #include "SGraphPanel.h"
-
-#include "BlueprintEditor.h"
-#include "PrivateAccessor.h"
-
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessBlueprintGraphEditor, FBlueprintEditor, TWeakPtr<SGraphEditor>, FocusedGraphEdPtr)
-#if ENGINE_MAJOR_VERSION >= 5
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessMaterialGraphEditor, FMaterialEditor, TWeakPtr<SGraphEditor>, FocusedGraphEdPtr)
-#else
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessMaterialGraphEditor, FMaterialEditor, TSharedPtr<SGraphEditor>, GraphEditor)
-#endif
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSoundCueGraphEditor, FSoundCueEditor, TSharedPtr<SGraphEditor>, SoundCueGraphEditor)
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessAIGraphEditor, FAIGraphEditor, TWeakPtr<SGraphEditor>, UpdateGraphEdPtr)
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorImpl, SGraphEditor, TSharedPtr<SGraphEditor>, Implementation)
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphEditorPanel, SGraphEditorImpl, TSharedPtr<SGraphPanel>, GraphPanel)
-DECLARE_PRIVATE_CONST_FUNC_ACCESSOR(FAccessSGraphNodeCommentHandleSelection, SGraphNodeComment, HandleSelection, void, bool, bool)
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccessSGraphPanelZoomLevels, SNodePanel, TUniquePtr<FZoomLevelsContainer>, ZoomLevels)
-DECLARE_PRIVATE_FUNC_ACCESSOR(FAccessSGraphPanelPostChangedZoom, SNodePanel, PostChangedZoom, void)
-
-SGraphEditor* GetGraphEditor(const FBlueprintEditor* Editor)
-{
-    auto& Ptr = Editor->*FPrivateAccessor<FAccessBlueprintGraphEditor>::Member;
-    if (Ptr.IsValid())
-    {
-        return Ptr.Pin().Get();
-    }
-    return nullptr;
-}
-
-SGraphEditor* GetGraphEditor(const FMaterialEditor* Editor)
-{
-#if ENGINE_MAJOR_VERSION >= 5
-    auto& FocusedGraphEd = Editor->*FPrivateAccessor<FAccessMaterialGraphEditor>::Member;
-    auto GraphEditor = FocusedGraphEd.Pin();
-#else
-    auto& GraphEditor = Editor->*FPrivateAccessor<FAccessMaterialGraphEditor>::Member;
-#endif
-    if (GraphEditor.IsValid())
-    {
-        return GraphEditor.Get();
-    }
-    return nullptr;
-}
-
-SGraphEditor* GetGraphEditor(const FSoundCueEditor* Editor)
-{
-    auto& GraphEditor = Editor->*FPrivateAccessor<FAccessSoundCueGraphEditor>::Member;
-    if (GraphEditor.IsValid())
-    {
-        return GraphEditor.Get();
-    }
-    return nullptr;
-}
-
-SGraphEditor* GetGraphEditor(const FBehaviorTreeEditor* Editor)
-{
-    auto& GraphEditor = Editor->*FPrivateAccessor<FAccessAIGraphEditor>::Member;
-    if (GraphEditor.IsValid())
-    {
-        return GraphEditor.Pin().Get();
-    }
-    return nullptr;
-}
 
 void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
 {
@@ -109,7 +42,7 @@ bool FFormatter::IsAssetSupported(const UObject* Object) const
     return false;
 }
 
-/** Matches widgets by InName */
+/** Matches widgets by type */
 struct FWidgetTypeMatcher
 {
     FWidgetTypeMatcher(const FName& InType)
@@ -160,14 +93,7 @@ SGraphEditor* FFormatter::FindGraphEditorByCursor() const
 
 SGraphPanel* FFormatter::GetCurrentPanel() const
 {
-    auto& Impl = CurrentEditor->*FPrivateAccessor<FAccessSGraphEditorImpl>::Member;
-    SGraphEditorImpl* GraphEditorImpl = StaticCast<SGraphEditorImpl*>(Impl.Get());
-    auto& GraphPanel = GraphEditorImpl->*FPrivateAccessor<FAccessSGraphEditorPanel>::Member;
-    if (GraphPanel.IsValid())
-    {
-        return GraphPanel.Get();
-    }
-    return nullptr;
+    return CurrentEditor->GetGraphPanel();
 }
 
 SGraphNode* FFormatter::GetWidget(const UEdGraphNode* Node) const
@@ -263,7 +189,7 @@ bool FFormatter::IsExecPin(const UEdGraphPin* Pin) const
     return Pin->PinType.PinCategory == "Exec";
 }
 
-void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset)
+void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const
 {
     UEdGraph* Graph = CurrentEditor->GetCurrentGraph();
     if (!Graph || !CurrentEditor)
@@ -279,28 +205,6 @@ void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset)
         auto WidgetNode = GetWidget(Node);
         SGraphPanel::SNode::FNodeSet Filter;
         WidgetNode->MoveTo(WidgetNode->GetPosition() + Offset, Filter, true);
-    }
-}
-
-void FFormatter::UpdateCommentNodes() const
-{
-    // No need to do this hack when AutoSizeComments is used.
-    auto AutoSizeCommentModule = FModuleManager::Get().GetModule(FName("AutoSizeComments"));
-    if (AutoSizeCommentModule)
-    {
-        return;
-    }
-
-    for (UEdGraphNode* Node : CurrentEditor->GetCurrentGraph()->Nodes)
-    {
-        if (!Node->IsA(UEdGraphNode_Comment::StaticClass()))
-        {
-            continue;
-        }
-        SGraphNode* NodeWidget = GetWidget(Node);
-        // Actually, we can't invoke HandleSelection if NodeWidget is not a SGraphNodeComment.
-        SGraphNodeComment* CommentNode = StaticCast<SGraphNodeComment*>(NodeWidget);
-        (CommentNode->*FPrivateAccessor<FAccessSGraphNodeCommentHandleSelection>::Member)(false, true);
     }
 }
 
@@ -350,62 +254,62 @@ static void TickWidgetRecursively(SWidget* Widget)
     Widget->Tick(Widget->GetCachedGeometry(), FSlateApplication::Get().GetCurrentTime(), FSlateApplication::Get().GetDeltaTime());
 }
 
-void FFormatter::SetZoomLevelTo11Scale() const
-{
-    if (CurrentEditor)
-    {
-        auto NodePanel = StaticCast<SNodePanel*>(GetCurrentPanel());
-        if (NodePanel)
-        {
-            if (!TopZoomLevels.IsValid())
-            {
-                TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
-            }
-            auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
-            TempZoomLevels = MoveTemp(ZoomLevels);
-            ZoomLevels = MoveTemp(TopZoomLevels);
-            (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
-#if (ENGINE_MAJOR_VERSION >= 5)
-            NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
-#else
-            NodePanel->InvalidatePrepass();
-#endif
-            auto Nodes = GetAllNodes();
-            for (auto Node : Nodes)
-            {
-                auto GraphNode = GetWidget(Node);
-                if (GraphNode != nullptr)
-                {
-                    TickWidgetRecursively(GraphNode);
-                    GraphNode->SlatePrepass();
-                }
-            }
-        }
-    }
-}
-
-void FFormatter::RestoreZoomLevel() const
-{
-    if (CurrentEditor)
-    {
-        auto NodePanel = StaticCast<SNodePanel*>(GetCurrentPanel());
-        if (NodePanel)
-        {
-            if (!TopZoomLevels.IsValid())
-            {
-                TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
-            }
-            auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
-            ZoomLevels = MoveTemp(TempZoomLevels);
-            (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
-#if (ENGINE_MAJOR_VERSION >= 5)
-            NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
-#else
-            NodePanel->InvalidatePrepass();
-#endif
-        }
-    }
-}
+//void FFormatter::SetZoomLevelTo11Scale() const
+//{
+//    if (CurrentEditor)
+//    {
+//        auto NodePanel = StaticCast<SNodePanel*>(GetCurrentPanel());
+//        if (NodePanel)
+//        {
+//            if (!TopZoomLevels.IsValid())
+//            {
+//                TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
+//            }
+//            auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
+//            TempZoomLevels = MoveTemp(ZoomLevels);
+//            ZoomLevels = MoveTemp(TopZoomLevels);
+//            (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
+//#if (ENGINE_MAJOR_VERSION >= 5)
+//            NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
+//#else
+//            NodePanel->InvalidatePrepass();
+//#endif
+//            auto Nodes = GetAllNodes();
+//            for (auto Node : Nodes)
+//            {
+//                auto GraphNode = GetWidget(Node);
+//                if (GraphNode != nullptr)
+//                {
+//                    TickWidgetRecursively(GraphNode);
+//                    GraphNode->SlatePrepass();
+//                }
+//            }
+//        }
+//    }
+//}
+//
+//void FFormatter::RestoreZoomLevel() const
+//{
+//    if (CurrentEditor)
+//    {
+//        auto NodePanel = StaticCast<SNodePanel*>(GetCurrentPanel());
+//        if (NodePanel)
+//        {
+//            if (!TopZoomLevels.IsValid())
+//            {
+//                TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
+//            }
+//            auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
+//            ZoomLevels = MoveTemp(TempZoomLevels);
+//            (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
+//#if (ENGINE_MAJOR_VERSION >= 5)
+//            NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
+//#else
+//            NodePanel->InvalidatePrepass();
+//#endif
+//        }
+//    }
+//}
 
 static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
 {
@@ -422,6 +326,48 @@ static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
     return SelectedGraphNodes;
 }
 
+static bool IsNodeUnderRect( const TSharedRef<SGraphNode> InNodeWidget, const FSlateRect& Rect) 
+{
+	const FVector2D NodePosition = Rect.GetTopLeft();
+	const FVector2D NodeSize = Rect.GetSize();
+	const FSlateRect CommentRect(NodePosition.X, NodePosition.Y, NodePosition.X + NodeSize.X, NodePosition.Y + NodeSize.Y);
+
+	const FVector2D InNodePosition = InNodeWidget->GetPosition();
+	const FVector2D InNodeSize = InNodeWidget->GetDesiredSize();
+
+	const FSlateRect NodeGeometryGraphSpace(InNodePosition.X, InNodePosition.Y, InNodePosition.X + InNodeSize.X, InNodePosition.Y + InNodeSize.Y);
+	return FSlateRect::IsRectangleContained(CommentRect, NodeGeometryGraphSpace);
+}
+
+TSet<UEdGraphNode*> FFormatter::GetNodesUnderComment(const UEdGraphNode_Comment* CommentNode) const
+{
+    SGraphNode* CommentNodeWidget = GetWidget(CommentNode);
+    auto CommentSize = CommentNodeWidget->GetDesiredSize();
+    if (CommentSize.IsZero())
+    {
+        return TSet<UEdGraphNode*>();
+    }
+    TSet<UEdGraphNode*> Result;
+    SGraphPanel* Panel = GetCurrentPanel();
+    FChildren* PanelChildren = Panel->GetAllChildren();
+    int32 NumChildren = PanelChildren->Num();
+    FVector2D CommentNodePosition = CommentNodeWidget->GetPosition();
+    FSlateRect CommentRect = FSlateRect(CommentNodePosition, CommentNodePosition + CommentSize);
+    for (int32 NodeIndex = 0; NodeIndex < NumChildren; ++NodeIndex)
+    {
+        const TSharedRef<SGraphNode> SomeNodeWidget = StaticCastSharedRef<SGraphNode>(PanelChildren->GetChildAt(NodeIndex));
+        UObject* GraphObject = SomeNodeWidget->GetObjectBeingDisplayed();
+        if (GraphObject != CommentNode)
+        {
+            if (IsNodeUnderRect(SomeNodeWidget, CommentRect))
+            {
+                Result.Add(Cast<UEdGraphNode>(GraphObject));
+            }
+        }
+    }
+    return Result;
+}
+
 static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNode*> Selected)
 {
     if (Selected.Num() != 0)
@@ -433,7 +379,7 @@ static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNod
             if (GraphNode->IsA(UEdGraphNode_Comment::StaticClass()))
             {
                 UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(GraphNode);
-                auto NodesInComment = CommentNode->GetNodesUnderComment();
+                auto NodesInComment = FFormatter::Instance().GetNodesUnderComment(CommentNode);
                 for (UObject* ObjectInComment : NodesInComment)
                 {
                     UEdGraphNode* NodeInComment = Cast<UEdGraphNode>(ObjectInComment);
@@ -458,13 +404,12 @@ void FFormatter::Format() const
     {
         return;
     }
-    UpdateCommentNodes();
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
     SelectedNodes = DoSelectionStrategy(Graph, SelectedNodes);
-    SetZoomLevelTo11Scale();
+    //SetZoomLevelTo11Scale();
     FFormatterGraph FormatterGraph(SelectedNodes);
     FormatterGraph.Format();
-    RestoreZoomLevel();
+    //RestoreZoomLevel();
     auto BoundMap = FormatterGraph.GetBoundMap();
     const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
     for (auto NodeRectPair : BoundMap)
@@ -486,7 +431,7 @@ void FFormatter::Format() const
     Graph->NotifyGraphChanged();
 }
 
-void FFormatter::PlaceBlock()
+void FFormatter::PlaceBlock() const
 {
     UEdGraph* Graph = CurrentEditor->GetCurrentGraph();
     if (!Graph || !CurrentEditor)

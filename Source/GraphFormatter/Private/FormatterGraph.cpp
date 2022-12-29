@@ -541,11 +541,11 @@ TArray<FFormatterNode*> FFormatterGraph::GetSuccessorsForNodes(TSet<FFormatterNo
     TArray<FFormatterNode*> Result;
     for (auto Node : Nodes)
     {
-        for (auto outEdge : Node->OutEdges)
+        for (auto OutEdge : Node->OutEdges)
         {
-            if (!Nodes.Contains(outEdge->To->OwningNode))
+            if (!Nodes.Contains(OutEdge->To->OwningNode))
             {
-                Result.Add(outEdge->To->OwningNode);
+                Result.Add(OutEdge->To->OwningNode);
             }
         }
     }
@@ -565,22 +565,6 @@ TArray<FFormatterNode*> FFormatterGraph::GetNodesGreaterThan(int32 i, TSet<FForm
     return Result;
 }
 
-static TSet<UEdGraphNode*> GetNodesUnderComment(const UEdGraphNode* InNode, TSet<UEdGraphNode*> SelectedNodes)
-{
-    const UEdGraphNode_Comment* CommentNode = Cast<UEdGraphNode_Comment>(InNode);
-    auto ObjectsUnderComment = CommentNode->GetNodesUnderComment();
-    TSet<UEdGraphNode*> NodesUnderComment;
-    for (auto Object : ObjectsUnderComment)
-    {
-        UEdGraphNode* Node = Cast<UEdGraphNode>(Object);
-        if (Node != nullptr && SelectedNodes.Contains(Node))
-        {
-            NodesUnderComment.Add(Node);
-        }
-    }
-    return NodesUnderComment;
-}
-
 void FFormatterGraph::BuildNodes(TSet<UEdGraphNode*> SelectedNodes)
 {
     while (true)
@@ -596,7 +580,8 @@ void FFormatterGraph::BuildNodes(TSet<UEdGraphNode*> SelectedNodes)
             {
                 if (CommentNode->CommentDepth == Depth)
                 {
-                    auto NodesUnderComment = GetNodesUnderComment(CommentNode, SelectedNodes);
+                    auto NodesUnderComment = FFormatter::Instance().GetNodesUnderComment(Cast<UEdGraphNode_Comment>(CommentNode));
+                    NodesUnderComment = SelectedNodes.Intersect(NodesUnderComment);
                     SelectedNodes = SelectedNodes.Difference(NodesUnderComment);
                     FFormatterNode* CollapsedNode = CollapseCommentNode(CommentNode, NodesUnderComment);
                     AddNode(CollapsedNode);
@@ -992,12 +977,12 @@ TArray<TSet<UEdGraphNode*>> FFormatterGraph::FindIsolated()
     return Result;
 }
 
-int32 FFormatterGraph::CalculateLongestPath() const
+int32 FFormatterGraph::AssignPathDepthForNodes() const
 {
     int32 LongestPath = 1;
     while (true)
     {
-        auto Leaves = GetLeavesWithPathDepthEqu0();
+        auto Leaves = GetLeavesWithPathDepth0();
         if (Leaves.Num() == 0)
         {
             break;
@@ -1039,7 +1024,7 @@ void FFormatterGraph::CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& L
     }
 }
 
-TArray<FFormatterNode*> FFormatterGraph::GetLeavesWithPathDepthEqu0() const
+TArray<FFormatterNode*> FFormatterGraph::GetLeavesWithPathDepth0() const
 {
     TArray<FFormatterNode*> Result;
     for (auto Node : Nodes)
@@ -1070,7 +1055,7 @@ void FFormatterGraph::DoLayering()
 {
     LayeredList.Empty();
     TSet<FFormatterNode*> Set;
-    for (int32 i = CalculateLongestPath(); i != 0; i--)
+    for (int32 i = AssignPathDepthForNodes(); i != 0; i--)
     {
         TSet<FFormatterNode*> Layer;
         auto Successors = GetSuccessorsForNodes(Set);

@@ -148,8 +148,8 @@ private:
     FFormatterNode* FindSourceNode() const;
     FFormatterNode* FindSinkNode() const;
     FFormatterNode* FindMedianNode() const;
-    TArray<FFormatterNode*> GetLeavesWithPathDepthEqu0() const;
-    int32 CalculateLongestPath() const;
+    TArray<FFormatterNode*> GetLeavesWithPathDepth0() const;
+    int32 AssignPathDepthForNodes() const;
 
     TArray<FFormatterNode*> Nodes;
     TMap<FGuid, FFormatterNode*> NodesMap;

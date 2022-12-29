@@ -12,6 +12,7 @@ class FBlueprintEditor;
 class FMaterialEditor;
 class FSoundCueEditor;
 class FBehaviorTreeEditor;
+class UEdGraphNode_Comment;
 
 struct FFormatter
 {
@@ -34,15 +35,13 @@ struct FFormatter
     FVector2D GetNodePosition(const UEdGraphNode* Node) const;
     FVector2D GetPinOffset(const UEdGraphPin* Pin) const;
     FSlateRect GetNodesBound(const TSet<UEdGraphNode*> Nodes) const;
+    TSet<UEdGraphNode*> GetNodesUnderComment(const UEdGraphNode_Comment* CommentNode) const;
 
     bool IsExecPin(const UEdGraphPin* Pin) const;
 
-    void Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset);
-    void UpdateCommentNodes() const;
-    void SetZoomLevelTo11Scale() const;
-    void RestoreZoomLevel() const;
+    void Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const;
     void Format() const;
-    void PlaceBlock();
+    void PlaceBlock() const;
     static FFormatter& Instance()
     {
         static FFormatter Context;
