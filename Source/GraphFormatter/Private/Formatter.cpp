@@ -477,10 +477,12 @@ void FFormatter::Format() const
         }
         else
         {
-            NodeRectPair.Key->NodePosX = NodeRectPair.Value.GetTopLeft().X;
-            NodeRectPair.Key->NodePosY = NodeRectPair.Value.GetTopLeft().Y;
+            auto WidgetNode = GetWidget(NodeRectPair.Key);
+            SGraphPanel::SNode::FNodeSet Filter;
+            WidgetNode->MoveTo(NodeRectPair.Value.GetTopLeft(), Filter, true);
         }
     }
+    
     Graph->NotifyGraphChanged();
 }
 
