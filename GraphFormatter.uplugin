@@ -4,7 +4,7 @@
 	"VersionName": "2.2.6",
 	"FriendlyName": "GraphFormatter",
 	"Description": "Auto arrange graph nodes.",
-	"Category": "Utility",
+	"Category": "Tools",
 	"CreatedBy": "Howaajin",
 	"CreatedByURL": "https://github.com/howaajin/graphformatter",
 	"DocsURL": "https://github.com/howaajin/graphformatter/blob/master/README.md",
