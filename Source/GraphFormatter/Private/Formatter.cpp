@@ -208,109 +208,6 @@ void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const
     }
 }
 
-static TUniquePtr<FZoomLevelsContainer> TopZoomLevels;
-static TUniquePtr<FZoomLevelsContainer> TempZoomLevels;
-
-class FTopZoomLevelContainer : public FZoomLevelsContainer
-{
-public:
-    virtual float GetZoomAmount(int32 InZoomLevel) const override
-    {
-        return 1.0f;
-    }
-    virtual int32 GetNearestZoomLevel(float InZoomAmount) const override
-    {
-        return 0;
-    }
-    virtual FText GetZoomText(int32 InZoomLevel) const override
-    {
-        return FText::FromString(TEXT("1:1"));
-    }
-    virtual int32 GetNumZoomLevels() const override
-    {
-        return 1;
-    }
-    virtual int32 GetDefaultZoomLevel() const override
-    {
-        return 0;
-    }
-    virtual EGraphRenderingLOD::Type GetLOD(int32 InZoomLevel) const override
-    {
-        return EGraphRenderingLOD::DefaultDetail;
-    }
-};
-
-static void TickWidgetRecursively(SWidget* Widget)
-{
-    Widget->GetChildren();
-    if (auto Children = Widget->GetChildren())
-    {
-        for (int32 ChildIndex = 0; ChildIndex < Children->Num(); ++ChildIndex)
-        {
-            auto ChildWidget = &Children->GetChildAt(ChildIndex).Get();
-            TickWidgetRecursively(ChildWidget);
-        }
-    }
-    Widget->Tick(Widget->GetCachedGeometry(), FSlateApplication::Get().GetCurrentTime(), FSlateApplication::Get().GetDeltaTime());
-}
-
-//void FFormatter::SetZoomLevelTo11Scale() const
-//{
-//    if (CurrentEditor)
-//    {
-//        auto NodePanel = StaticCast<SNodePanel*>(GetCurrentPanel());
-//        if (NodePanel)
-//        {
-//            if (!TopZoomLevels.IsValid())
-//            {
-//                TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
-//            }
-//            auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
-//            TempZoomLevels = MoveTemp(ZoomLevels);
-//            ZoomLevels = MoveTemp(TopZoomLevels);
-//            (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
-//#if (ENGINE_MAJOR_VERSION >= 5)
-//            NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
-//#else
-//            NodePanel->InvalidatePrepass();
-//#endif
-//            auto Nodes = GetAllNodes();
-//            for (auto Node : Nodes)
-//            {
-//                auto GraphNode = GetWidget(Node);
-//                if (GraphNode != nullptr)
-//                {
-//                    TickWidgetRecursively(GraphNode);
-//                    GraphNode->SlatePrepass();
-//                }
-//            }
-//        }
-//    }
-//}
-//
-//void FFormatter::RestoreZoomLevel() const
-//{
-//    if (CurrentEditor)
-//    {
-//        auto NodePanel = StaticCast<SNodePanel*>(GetCurrentPanel());
-//        if (NodePanel)
-//        {
-//            if (!TopZoomLevels.IsValid())
-//            {
-//                TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
-//            }
-//            auto& ZoomLevels = NodePanel->*FPrivateAccessor<FAccessSGraphPanelZoomLevels>::Member;
-//            ZoomLevels = MoveTemp(TempZoomLevels);
-//            (NodePanel->*FPrivateAccessor<FAccessSGraphPanelPostChangedZoom>::Member)();
-//#if (ENGINE_MAJOR_VERSION >= 5)
-//            NodePanel->Invalidate(EInvalidateWidgetReason::Prepass);
-//#else
-//            NodePanel->InvalidatePrepass();
-//#endif
-//        }
-//    }
-//}
-
 static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
 {
     TSet<UEdGraphNode*> SelectedGraphNodes;
@@ -406,10 +303,8 @@ void FFormatter::Format() const
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
     SelectedNodes = DoSelectionStrategy(Graph, SelectedNodes);
-    //SetZoomLevelTo11Scale();
     FFormatterGraph FormatterGraph(SelectedNodes);
     FormatterGraph.Format();
-    //RestoreZoomLevel();
     auto BoundMap = FormatterGraph.GetBoundMap();
     const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
     for (auto NodeRectPair : BoundMap)
