@@ -815,9 +815,9 @@ void FFormatterGraph::RemoveCycle()
     {
         ClonedGraph->RemoveNode(SinkNode);
     }
-    while (auto MedianNode = ClonedGraph->FindMedianNode())
+    while (auto MedianNode = ClonedGraph->FindMaxDegreeDiffNode())
     {
-        for (auto Edge : MedianNode->OutEdges)
+        for (auto Edge : MedianNode->InEdges)
         {
             FFormatterPin* From = PinsMap[Edge->From->Guid];
             FFormatterPin* To = PinsMap[Edge->To->Guid];
@@ -853,13 +853,13 @@ FFormatterNode* FFormatterGraph::FindSinkNode() const
     return nullptr;
 }
 
-FFormatterNode* FFormatterGraph::FindMedianNode() const
+FFormatterNode* FFormatterGraph::FindMaxDegreeDiffNode() const
 {
     FFormatterNode* Result = nullptr;
     int32 MaxDegreeDiff = -INT32_MAX;
     for (auto Node : Nodes)
     {
-        const int32 DegreeDiff = Node->InEdges.Num() - Node->OutEdges.Num();
+        const int32 DegreeDiff = Node->OutEdges.Num() - Node->InEdges.Num();
         if (DegreeDiff > MaxDegreeDiff)
         {
             MaxDegreeDiff = DegreeDiff;
@@ -1054,37 +1054,18 @@ static bool BehaviorTreeNodeComparer(const FFormatterNode& A, const FFormatterNo
 void FFormatterGraph::DoLayering()
 {
     LayeredList.Empty();
-    TSet<FFormatterNode*> Set;
-    for (int32 i = AssignPathDepthForNodes(); i != 0; i--)
+    auto LongestPath = AssignPathDepthForNodes();
+    LayeredList.SetNum(LongestPath);
+    for (auto Node : Nodes)
     {
-        TSet<FFormatterNode*> Layer;
-        auto Successors = GetSuccessorsForNodes(Set);
-        auto NodesToProcess = GetNodesGreaterThan(i, Set);
-        NodesToProcess.Append(Successors);
-        for (auto Node : NodesToProcess)
+        LayeredList[Node->PathDepth].Add(Node);
+    }
+    if(FFormatter::Instance().IsBehaviorTree)
+    {
+        for (auto Layer : LayeredList)
         {
-            auto Predecessors = Node->GetPredecessors();
-            bool bPredecessorsFinished = true;
-            for (auto Predecessor : Predecessors)
-            {
-                if (!Set.Contains(Predecessor))
-                {
-                    bPredecessorsFinished = false;
-                    break;
-                }
-            }
-            if (bPredecessorsFinished)
-            {
-                Layer.Add(Node);
-            }
+            Layer.Sort(BehaviorTreeNodeComparer);
         }
-        Set.Append(Layer);
-        TArray<FFormatterNode*> Array = Layer.Array();
-        if (FFormatter::Instance().IsBehaviorTree)
-        {
-            Array.Sort(BehaviorTreeNodeComparer);
-        }
-        LayeredList.Add(Array);
     }
 }
 

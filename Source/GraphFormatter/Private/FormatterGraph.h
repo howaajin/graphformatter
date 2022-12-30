@@ -147,7 +147,7 @@ private:
     FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes) const;
     FFormatterNode* FindSourceNode() const;
     FFormatterNode* FindSinkNode() const;
-    FFormatterNode* FindMedianNode() const;
+    FFormatterNode* FindMaxDegreeDiffNode() const;
     TArray<FFormatterNode*> GetLeavesWithPathDepth0() const;
     int32 AssignPathDepthForNodes() const;
 
