@@ -47,7 +47,8 @@ struct FWidgetTypeMatcher
 {
     FWidgetTypeMatcher(const FName& InType)
         : TypeName(InType)
-    {}
+    {
+    }
 
     bool IsMatch(const TSharedRef<const SWidget>& InWidget) const
     {
@@ -140,8 +141,7 @@ FVector2D FFormatter::GetNodeSize(const UEdGraphNode* Node) const
     auto GraphNode = GetWidget(Node);
     if (GraphNode != nullptr)
     {
-        FVector2D Size = GraphNode->GetDesiredSize();
-        return Size;
+        return GraphNode->GetDesiredSize();
     }
     return FVector2D(Node->NodeWidth, Node->NodeHeight);
 }
@@ -189,6 +189,25 @@ bool FFormatter::IsExecPin(const UEdGraphPin* Pin) const
     return Pin->PinType.PinCategory == "Exec";
 }
 
+bool FFormatter::PreCommand()
+{
+    if (!CurrentEditor)
+    {
+        return false;
+    }
+    CurrentGraph = CurrentEditor->GetCurrentGraph();
+    if (!CurrentGraph)
+    {
+        return false;
+    }
+    CurrentPanel = GetCurrentPanel();
+    if (!CurrentPanel)
+    {
+        return false;
+    }
+    return true;
+}
+
 void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const
 {
     UEdGraph* Graph = CurrentEditor->GetCurrentGraph();
@@ -223,17 +242,17 @@ static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
     return SelectedGraphNodes;
 }
 
-static bool IsNodeUnderRect( const TSharedRef<SGraphNode> InNodeWidget, const FSlateRect& Rect) 
+static bool IsNodeUnderRect(const TSharedRef<SGraphNode> InNodeWidget, const FSlateRect& Rect)
 {
-	const FVector2D NodePosition = Rect.GetTopLeft();
-	const FVector2D NodeSize = Rect.GetSize();
-	const FSlateRect CommentRect(NodePosition.X, NodePosition.Y, NodePosition.X + NodeSize.X, NodePosition.Y + NodeSize.Y);
+    const FVector2D NodePosition = Rect.GetTopLeft();
+    const FVector2D NodeSize = Rect.GetSize();
+    const FSlateRect CommentRect(NodePosition.X, NodePosition.Y, NodePosition.X + NodeSize.X, NodePosition.Y + NodeSize.Y);
 
-	const FVector2D InNodePosition = InNodeWidget->GetPosition();
-	const FVector2D InNodeSize = InNodeWidget->GetDesiredSize();
+    const FVector2D InNodePosition = InNodeWidget->GetPosition();
+    const FVector2D InNodeSize = InNodeWidget->GetDesiredSize();
 
-	const FSlateRect NodeGeometryGraphSpace(InNodePosition.X, InNodePosition.Y, InNodePosition.X + InNodeSize.X, InNodePosition.Y + InNodeSize.Y);
-	return FSlateRect::IsRectangleContained(CommentRect, NodeGeometryGraphSpace);
+    const FSlateRect NodeGeometryGraphSpace(InNodePosition.X, InNodePosition.Y, InNodePosition.X + InNodeSize.X, InNodePosition.Y + InNodeSize.Y);
+    return FSlateRect::IsRectangleContained(CommentRect, NodeGeometryGraphSpace);
 }
 
 TSet<UEdGraphNode*> FFormatter::GetNodesUnderComment(const UEdGraphNode_Comment* CommentNode) const
@@ -294,15 +313,14 @@ static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNod
     return SelectedGraphNodes;
 }
 
-void FFormatter::Format() const
+void FFormatter::Format()
 {
-    UEdGraph* Graph = CurrentEditor->GetCurrentGraph();
-    if (!Graph || !CurrentEditor)
+    if (!PreCommand())
     {
         return;
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
-    SelectedNodes = DoSelectionStrategy(Graph, SelectedNodes);
+    SelectedNodes = DoSelectionStrategy(CurrentGraph, SelectedNodes);
     FFormatterGraph FormatterGraph(SelectedNodes);
     FormatterGraph.Format();
     auto BoundMap = FormatterGraph.GetBoundMap();
@@ -322,14 +340,13 @@ void FFormatter::Format() const
             WidgetNode->MoveTo(NodeRectPair.Value.GetTopLeft(), Filter, true);
         }
     }
-    
-    Graph->NotifyGraphChanged();
+
+    CurrentGraph->NotifyGraphChanged();
 }
 
-void FFormatter::PlaceBlock() const
+void FFormatter::PlaceBlock()
 {
-    UEdGraph* Graph = CurrentEditor->GetCurrentGraph();
-    if (!Graph || !CurrentEditor)
+    if (!PreCommand())
     {
         return;
     }
@@ -379,5 +396,5 @@ void FFormatter::PlaceBlock() const
         FVector2D Offset = LinkedCenterFrom - LinkedCenterTo;
         Translate(ConnectedNodesRight, Offset);
     }
-    Graph->NotifyGraphChanged();
+    CurrentGraph->NotifyGraphChanged();
 }

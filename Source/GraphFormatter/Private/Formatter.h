@@ -39,9 +39,11 @@ struct FFormatter
 
     bool IsExecPin(const UEdGraphPin* Pin) const;
 
+    bool PreCommand();
     void Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const;
-    void Format() const;
-    void PlaceBlock() const;
+    void Format();
+    void PlaceBlock();
+
     static FFormatter& Instance()
     {
         static FFormatter Context;
@@ -49,9 +51,14 @@ struct FFormatter
     }
 
 private:
-    FFormatter() {}
+    FFormatter()
+    {
+    }
+
     FFormatter(FFormatter const&) = delete;
     void operator=(FFormatter const&) = delete;
 
     SGraphEditor* CurrentEditor = nullptr;
+    SGraphPanel* CurrentPanel = nullptr;
+    UEdGraph* CurrentGraph = nullptr;
 };
