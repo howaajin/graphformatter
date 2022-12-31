@@ -35,7 +35,6 @@ class FFormatterModule : public IGraphFormatterModule
     SGraphEditor* FindEditorForObject(UObject* Object) const;
     FDelegateHandle GraphEditorDelegateHandle;
     TArray<TSharedPtr<EGraphFormatterPositioningAlgorithm>> AlgorithmOptions;
-    TMap<UObject*, SGraphEditor*> ObjectToWidget;
 };
 
 IMPLEMENT_MODULE(FFormatterModule, GraphFormatter)
@@ -132,14 +131,7 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
 
 void FFormatterModule::HandleEditorWidgetCreated(UObject* Object)
 {
-    if (FFormatter::Instance().IsAssetSupported(Object))
-    {
-        if (auto Editor = FFormatter::Instance().FindGraphEditorForTopLevelWindow())
-        {
-            ObjectToWidget.Add(Object, Editor);
-        }
-    }
-    else
+    if (!FFormatter::Instance().IsAssetSupported(Object))
     {
         const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
         if (Settings->AutoDetectGraphEditor)
@@ -151,15 +143,10 @@ void FFormatterModule::HandleEditorWidgetCreated(UObject* Object)
             }
         }
     }
-
 }
 
 void FFormatterModule::HandleAssetEditorClosed(UObject* Object, EAssetEditorCloseReason Reason)
 {
-    if (ObjectToWidget.Contains(Object))
-    {
-        ObjectToWidget.Remove(Object);
-    }
 }
 
 static FText GetEnumAsString(EGraphFormatterPositioningAlgorithm EnumValue)
@@ -210,7 +197,6 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
             .ToolTipText(LOCTEXT("GraphFormatterHorizontalSpacingiToolTips", "Spacing between two layers."))
             .Value(Settings->HorizontalSpacing)
             .MinDesiredWidth(80)
-            .Visibility_Lambda([]() { return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Visible : EVisibility::Collapsed; })
             .OnValueCommitted_Lambda([MutableSettings](int32 Number, ETextCommit::Type CommitInfo)
             {
                 MutableSettings->HorizontalSpacing = Number; MutableSettings->PostEditChange(); MutableSettings->SaveConfig();
@@ -219,10 +205,7 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
         +SHorizontalBox::Slot()
         .Padding(2.0f)
         [
-            SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm>>).Visibility_Lambda([]()
-            {
-                return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Visible : EVisibility::Collapsed;
-            })
+            SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm>>)
             .ContentPadding(FMargin(6.0f, 2.0f))
             .OptionsSource(&AlgorithmOptions)
             .ToolTipText_Lambda([]() { return FText::FromString("Positioning Algorithm"); })
@@ -245,14 +228,12 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
                 .Text_Lambda([Settings]() { return GetEnumAsString(Settings->PositioningAlgorithm); })
             ]
         ];
+
         auto VerticalEditArea = SNew(SVerticalBox)
         + SVerticalBox::Slot()
         .Padding(2.0f)
         [
-            SNew(SSpinBox<int32>).Visibility_Lambda([]()
-            {
-                return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Collapsed : EVisibility::Visible;
-            })
+            SNew(SSpinBox<int32>)
             .MinValue(0)
             .MaxValue(1000)
             .MinSliderValue(0)
@@ -271,10 +252,6 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
         .Padding(2.0f)
         [
             SAssignNew(AlgorithmComboBox, SComboBox<TSharedPtr<EGraphFormatterPositioningAlgorithm>>)
-            .Visibility_Lambda([]()
-            {
-                return FMultiBoxSettings::UseSmallToolBarIcons.Get() ? EVisibility::Collapsed : EVisibility::Visible;
-            })
             .ContentPadding(FMargin(6.0f, 2.0f))
             .OptionsSource(&AlgorithmOptions)
             .ToolTipText_Lambda([]()
@@ -301,7 +278,7 @@ void FFormatterModule::FillToolbar(FToolBarBuilder& ToolbarBuilder)
             ]
         ];
         ToolbarBuilder.AddWidget(HorizontalEditArea);
-        ToolbarBuilder.AddWidget(VerticalEditArea);
+        //ToolbarBuilder.AddWidget(VerticalEditArea);
         ToolbarBuilder.AddToolBarButton(
             Commands.StraightenConnections,
             NAME_None,
@@ -362,19 +339,12 @@ bool FFormatterModule::IsStraightenConnectionsEnabled() const
 
 SGraphEditor* FFormatterModule::FindEditorForObject(UObject* Object) const
 {
-    if (SGraphEditor* Editor = ObjectToWidget.FindRef(Object))
+    SGraphEditor* Editor = FFormatter::Instance().FindGraphEditorByCursor();
+    if (!Editor)
     {
-        return Editor;
+        return FFormatter::Instance().FindGraphEditorForTopLevelWindow();
     }
-    else
-    {
-        Editor = FFormatter::Instance().FindGraphEditorByCursor();
-        if (!Editor)
-        {
-            return FFormatter::Instance().FindGraphEditorForTopLevelWindow();
-        }
-        return Editor;
-    }
+    return Editor;
 }
 
 void FFormatterModule::ShutdownModule()

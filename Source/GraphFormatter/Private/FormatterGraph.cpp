@@ -1054,18 +1054,37 @@ static bool BehaviorTreeNodeComparer(const FFormatterNode& A, const FFormatterNo
 void FFormatterGraph::DoLayering()
 {
     LayeredList.Empty();
-    auto LongestPath = AssignPathDepthForNodes();
-    LayeredList.SetNum(LongestPath);
-    for (auto Node : Nodes)
+    TSet<FFormatterNode*> Set;
+    for (int32 i = AssignPathDepthForNodes(); i != 0; i--)
     {
-        LayeredList[Node->PathDepth].Add(Node);
-    }
-    if(FFormatter::Instance().IsBehaviorTree)
-    {
-        for (auto Layer : LayeredList)
+        TSet<FFormatterNode*> Layer;
+        auto Successors = GetSuccessorsForNodes(Set);
+        auto NodesToProcess = GetNodesGreaterThan(i, Set);
+        NodesToProcess.Append(Successors);
+        for (auto Node : NodesToProcess)
         {
-            Layer.Sort(BehaviorTreeNodeComparer);
+            auto Predecessors = Node->GetPredecessors();
+            bool bPredecessorsFinished = true;
+            for (auto Predecessor : Predecessors)
+            {
+                if (!Set.Contains(Predecessor))
+                {
+                    bPredecessorsFinished = false;
+                    break;
+                }
+            }
+            if (bPredecessorsFinished)
+            {
+                Layer.Add(Node);
+            }
         }
+        Set.Append(Layer);
+        TArray<FFormatterNode*> Array = Layer.Array();
+        if (FFormatter::Instance().IsBehaviorTree)
+        {
+            Array.Sort(BehaviorTreeNodeComparer);
+        }
+        LayeredList.Add(Array);
     }
 }
 
