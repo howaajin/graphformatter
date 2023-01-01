@@ -19,10 +19,12 @@ struct FFormatter
     bool IsVerticalLayout = false;
     bool IsBehaviorTree = false;
     bool IsBlueprint = false;
+    inline static bool IsAutoSizeComment = false;
 
     void SetCurrentEditor(SGraphEditor* Editor, UObject* Object);
 
     bool IsAssetSupported(const UObject* Object) const;
+    bool IsExecPin(const UEdGraphPin* Pin) const;
 
     SGraphEditor* FindGraphEditorForTopLevelWindow() const;
     SGraphEditor* FindGraphEditorByCursor() const;
@@ -37,24 +39,14 @@ struct FFormatter
     FSlateRect GetNodesBound(const TSet<UEdGraphNode*> Nodes) const;
     TSet<UEdGraphNode*> GetNodesUnderComment(const UEdGraphNode_Comment* CommentNode) const;
 
-    bool IsExecPin(const UEdGraphPin* Pin) const;
-
     bool PreCommand();
     void Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const;
     void Format();
     void PlaceBlock();
 
-    static FFormatter& Instance()
-    {
-        static FFormatter Context;
-        return Context;
-    }
-
+    static FFormatter& Instance();
 private:
-    FFormatter()
-    {
-    }
-
+    FFormatter();
     FFormatter(FFormatter const&) = delete;
     void operator=(FFormatter const&) = delete;
 

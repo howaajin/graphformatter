@@ -15,6 +15,14 @@
 #include "SGraphNodeComment.h"
 #include "SGraphPanel.h"
 
+#include "PrivateAccessor.h"
+
+struct FAccess_SGraphNodeResizable_UserSize
+{
+    using MemberType = FVector2D SGraphNodeResizable::*;
+};
+template struct FPrivateRob<FAccess_SGraphNodeResizable_UserSize, &SGraphNodeResizable::UserSize>;
+
 void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
 {
     CurrentEditor = Editor;
@@ -227,7 +235,7 @@ void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const
     }
 }
 
-static TSet<UEdGraphNode*> GetSelectedNodes(SGraphEditor* GraphEditor)
+static TSet<UEdGraphNode*> GetSelectedNodes(const SGraphEditor* GraphEditor)
 {
     TSet<UEdGraphNode*> SelectedGraphNodes;
     TSet<UObject*> SelectedNodes = GraphEditor->GetSelectedNodes();
@@ -257,13 +265,23 @@ static bool IsNodeUnderRect(const TSharedRef<SGraphNode> InNodeWidget, const FSl
 
 TSet<UEdGraphNode*> FFormatter::GetNodesUnderComment(const UEdGraphNode_Comment* CommentNode) const
 {
+    TSet<UEdGraphNode*> Result;
+    if (IsAutoSizeComment)
+    {
+        auto NodesUnderComment = CommentNode->GetNodesUnderComment();
+        for (auto Object : NodesUnderComment)
+        {
+            UEdGraphNode* Node = StaticCast<UEdGraphNode*>(Object);
+            Result.Add(Node);
+        }
+        return Result;
+    }
     SGraphNode* CommentNodeWidget = GetWidget(CommentNode);
     auto CommentSize = CommentNodeWidget->GetDesiredSize();
     if (CommentSize.IsZero())
     {
         return TSet<UEdGraphNode*>();
     }
-    TSet<UEdGraphNode*> Result;
     SGraphPanel* Panel = GetCurrentPanel();
     FChildren* PanelChildren = Panel->GetAllChildren();
     int32 NumChildren = PanelChildren->Num();
@@ -327,21 +345,19 @@ void FFormatter::Format()
     const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
     for (auto NodeRectPair : BoundMap)
     {
-        NodeRectPair.Key->Modify();
+        auto WidgetNode = GetWidget(NodeRectPair.Key);
+        SGraphPanel::SNode::FNodeSet Filter;
+        WidgetNode->MoveTo(NodeRectPair.Value.GetTopLeft(), Filter, true);
         if (NodeRectPair.Key->IsA(UEdGraphNode_Comment::StaticClass()))
         {
             auto CommentNode = Cast<UEdGraphNode_Comment>(NodeRectPair.Key);
             CommentNode->SetBounds(NodeRectPair.Value);
-        }
-        else
-        {
-            auto WidgetNode = GetWidget(NodeRectPair.Key);
-            SGraphPanel::SNode::FNodeSet Filter;
-            WidgetNode->MoveTo(NodeRectPair.Value.GetTopLeft(), Filter, true);
+            if (auto NodeResizable = StaticCast<SGraphNodeResizable*>(WidgetNode))
+            {
+                NodeResizable->*FPrivateAccessor<FAccess_SGraphNodeResizable_UserSize>::Member = NodeRectPair.Value.GetSize();
+            }
         }
     }
-
-    CurrentGraph->NotifyGraphChanged();
 }
 
 void FFormatter::PlaceBlock()
@@ -396,5 +412,20 @@ void FFormatter::PlaceBlock()
         FVector2D Offset = LinkedCenterFrom - LinkedCenterTo;
         Translate(ConnectedNodesRight, Offset);
     }
-    CurrentGraph->NotifyGraphChanged();
+}
+
+FFormatter& FFormatter::Instance()
+{
+    auto AutoSizeCommentModule = FModuleManager::Get().GetModule(FName("AutoSizeComments"));
+    if (AutoSizeCommentModule)
+    {
+        IsAutoSizeComment = true;
+    }
+
+    static FFormatter Context;
+    return Context;
+}
+
+FFormatter::FFormatter()
+{
 }
