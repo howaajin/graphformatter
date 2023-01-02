@@ -2,8 +2,8 @@
 
 setlocal
 
-set DES_FILE="%~dp0\GraphFormatter.uplugin"
-set BUILD_DIR=%~dp0\Build
+set DES_FILE="%~dp0GraphFormatter.uplugin"
+set BUILD_DIR=%~dp0Build
 
 if not exist %BUILD_DIR% mkdir %BUILD_DIR% 
 
@@ -23,10 +23,11 @@ if defined UE_PATH (
         exit /b 1
     )
     if "%~2" == "-install" (
-        xcopy "%BUILD_DIR%\%~1\*" "%UE_PATH%\Engine\Plugins\Marketplace\GraphFormatter\" /s /e /y
+        rd /s /q "%UE_PATH%\Engine\Plugins\Marketplace\GraphFormatter"
+        xcopy "%BUILD_DIR%\%~1\GraphFormatter\*" "%UE_PATH%\Engine\Plugins\Marketplace\GraphFormatter\" /s /q /e /y /f
     )
     if "%~3" == "-enabled" (
-        xcopy "%DES_FILE%" "%UE_PATH%\Engine\Plugins\Marketplace\GraphFormatter\GraphFormatter.uplugin" /y
+        copy "%DES_FILE%" "%UE_PATH%\Engine\Plugins\Marketplace\GraphFormatter\GraphFormatter.uplugin" /y
     )
     where 7z.exe >nul 2>nul
     IF NOT ERRORLEVEL 0 (
