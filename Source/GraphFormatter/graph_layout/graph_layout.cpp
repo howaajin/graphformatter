@@ -121,6 +121,15 @@ namespace graph_layout
         return result;
     }
 
+    node_t::~node_t()
+    {
+        for (auto pin : pins)
+        {
+            delete pin;
+        }
+        delete graph;
+    }
+
     node_t* node_t::clone() const
     {
         auto new_node = new node_t();
@@ -171,12 +180,24 @@ namespace graph_layout
         }
         for (auto e : edges)
         {
-            auto from_pin = pins_map_inv[e.second->tail];
-            auto to_pin = pins_map_inv[e.second->head];
-            auto edge = cloned->add_edge(from_pin, to_pin);
+            auto tail_pin = pins_map_inv[e.second->tail];
+            auto head_pin = pins_map_inv[e.second->head];
+            auto edge = cloned->add_edge(tail_pin, head_pin);
             edges_map.insert(make_pair(edge, e.second));
         }
         return cloned;
+    }
+
+    graph_t::~graph_t()
+    {
+        for (auto [k, edge] : edges)
+        {
+            delete edge;
+        }
+        for (auto n : nodes)
+        {
+            delete n;
+        }
     }
 
     node_t* graph_t::add_node(graph_t* sub_graph)
@@ -207,18 +228,18 @@ namespace graph_layout
         delete node;
     }
 
-    edge_t* graph_t::add_edge(pin_t* from, pin_t* to)
+    edge_t* graph_t::add_edge(pin_t* tail, pin_t* head)
     {
-        auto k = make_pair(from, to);
+        auto k = make_pair(tail, head);
         auto it = edges.find(k);
         if (it != edges.end())
         {
             return it->second;
         }
-        auto edge = new edge_t{from, to};
-        edges.insert(make_pair(make_pair(from, to), edge));
-        from->owner->out_edges.push_back(edge);
-        to->owner->in_edges.push_back(edge);
+        auto edge = new edge_t{tail, head};
+        edges.insert(make_pair(make_pair(tail, head), edge));
+        tail->owner->out_edges.push_back(edge);
+        head->owner->in_edges.push_back(edge);
         return edge;
     }
 
@@ -233,9 +254,9 @@ namespace graph_layout
         delete edge;
     }
 
-    void graph_t::remove_edge(pin_t* from, pin_t* to)
+    void graph_t::remove_edge(pin_t* tail, pin_t* head)
     {
-        auto key = make_pair(from, to);
+        auto key = make_pair(tail, head);
         auto it = edges.find(key);
         if (it != edges.end())
         {
@@ -373,10 +394,10 @@ namespace graph_layout
         vector<edge_t*> original_non_tree_edges;
         for (auto e : non_tree_edges)
         {
-            auto from_node = e->tail->owner;
-            auto to_node = e->head->owner;
+            auto tail_node = e->tail->owner;
+            auto head_node = e->head->owner;
             original_non_tree_edges.push_back(edges_map[e]);
-            node_pairs.emplace_back(from_node, to_node);
+            node_pairs.emplace_back(tail_node, head_node);
             tree->remove_edge(e);
         }
         for (size_t i = 0; i < node_pairs.size(); i++)
@@ -394,12 +415,12 @@ namespace graph_layout
     {
         init_rank();
         set<node_t*> tree_nodes;
-        edge_t* min_slack_non_tree_edge;
-        node_t* incident_node;
-        while (tight_tree(tree_nodes, non_tree_edges, &min_slack_non_tree_edge, &incident_node) < nodes.size())
+        while (tight_tree(tree_nodes, non_tree_edges) < nodes.size())
         {
-            auto delta = min_slack_non_tree_edge->slack();
-            if(min_slack_non_tree_edge->head->owner == incident_node)
+            node_t* incident_node;
+            edge_t* e = find_min_incident_edge(tree_nodes, non_tree_edges, &incident_node);
+            auto delta = e->slack();
+            if (e->head->owner == incident_node)
             {
                 delta = -delta;
             }
@@ -410,7 +431,6 @@ namespace graph_layout
             tree_nodes.clear();
             non_tree_edges.clear();
         }
-        init_cut_values(non_tree_edges);
     }
 
     void graph_t::init_rank()
@@ -506,23 +526,22 @@ namespace graph_layout
 
     void graph_t::add_to_weights(const edge_t* edge, int& head_to_tail_weight, int& tail_to_head_weight)
     {
-        auto from = edge->tail->owner;
-        auto to = edge->head->owner;
-        if (from->belongs_to_tail && to->belongs_to_head)
+        auto tail = edge->tail->owner;
+        auto head = edge->head->owner;
+        if (tail->belongs_to_tail && head->belongs_to_head)
         {
             tail_to_head_weight += edge->weight;
         }
-        if (from->belongs_to_head && to->belongs_to_tail)
+        if (tail->belongs_to_head && head->belongs_to_tail)
         {
             head_to_tail_weight += edge->weight;
         }
     }
 
-    size_t graph_t::tight_tree(std::set<node_t*>& tree_nodes, std::set<edge_t*>& non_tree_edges, edge_t** min_slack_non_tree_edge, node_t** incident_node) const
+    size_t graph_t::tight_tree(std::set<node_t*>& tree_nodes, std::set<edge_t*>& non_tree_edges) const
     {
         vector<node_t*> stack;
-        *min_slack_non_tree_edge = nullptr;
-        *incident_node = nullptr;
+        set<node_t*> non_tree_nodes;
         int min_slack = std::numeric_limits<int>::max();
         if (min_ranking_dummy_node)
         {
@@ -530,7 +549,7 @@ namespace graph_layout
         }
         else
         {
-            if(max_ranking_dummy_node)
+            if (max_ranking_dummy_node)
             {
                 stack.push_back(max_ranking_dummy_node);
             }
@@ -544,7 +563,7 @@ namespace graph_layout
             auto n = stack.back();
             tree_nodes.insert(n);
             stack.pop_back();
-            auto connected_nodes = n->get_direct_connected_nodes([&min_slack, min_slack_non_tree_edge, n ,&non_tree_edges, incident_node, &tree_nodes](edge_t* e)
+            auto connected_nodes = n->get_direct_connected_nodes([&min_slack, n ,&non_tree_edges, &non_tree_nodes](edge_t* e)
             {
                 if (e->slack() != 0)
                 {
@@ -552,8 +571,6 @@ namespace graph_layout
                     if (e->slack() < min_slack)
                     {
                         min_slack = e->slack();
-                        *min_slack_non_tree_edge = e;
-                        *incident_node = n;
                     }
                     return false;
                 }
@@ -568,6 +585,28 @@ namespace graph_layout
             }
         }
         return tree_nodes.size();
+    }
+
+    edge_t* graph_t::find_min_incident_edge(const std::set<node_t*>& tree, const std::set<edge_t*>& non_tree_edges, node_t** incident_node)
+    {
+        edge_t* min_slack_edge = nullptr;
+        int slack = std::numeric_limits<int>::max();
+        *incident_node = nullptr;
+        for (auto e : non_tree_edges)
+        {
+            bool head_is_tree_node = tree.find(e->head->owner) != tree.end();
+            bool tail_is_tree_node = tree.find(e->tail->owner) != tree.end();
+            if ((head_is_tree_node && !tail_is_tree_node) || (!head_is_tree_node && tail_is_tree_node))
+            {
+                if (e->slack() < slack)
+                {
+                    min_slack_edge = e;
+                    slack = e->slack();
+                    *incident_node = head_is_tree_node ? e->head->owner : e->tail->owner;
+                }
+            }
+        }
+        return min_slack_edge;
     }
 
     vector<node_t*> graph_t::get_nodes_without_unscanned_in_edges(const set<node_t*>& visited, const set<edge_t*>& scanned_set) const
@@ -599,45 +638,55 @@ namespace graph_layout
     void graph_t::test()
     {
         graph_t g;
-        auto node_a = g.add_node("a");
-        auto node_b = g.add_node("b");
-        auto node_c = g.add_node("c");
-        auto node_d = g.add_node("d");
-        auto node_e = g.add_node("e");
-        auto node_f = g.add_node("f");
-        auto node_g = g.add_node("g");
-        auto node_h = g.add_node("h");
-        auto pin_a_out_1 = node_a->add_pin(pin_type_t::out);
-        auto pin_a_out_2 = node_a->add_pin(pin_type_t::out);
-        auto pin_a_out_3 = node_a->add_pin(pin_type_t::out);
-        auto pin_b_in = node_b->add_pin(pin_type_t::in);
+        auto node_a = g.add_node("VertexNormalWs");
+        auto node_b = g.add_node("Camera Vector");
+        auto node_c = g.add_node("Dot");
+        auto node_d = g.add_node("Clamp");
+        auto node_e = g.add_node("Power");
+        auto node_f = g.add_node("Add");
+        auto node_g = g.add_node("Lerp");
+        auto node_h = g.add_node("Multiply");
+        auto node_i = g.add_node("Add_i");
+        auto node_j = g.add_node("GizmoColor");
+        auto node_k = g.add_node("Multiply_k");
+        auto node_l = g.add_node("GizmoMaterial");
+
+        auto pin_a_out = node_a->add_pin(pin_type_t::out);
         auto pin_b_out = node_b->add_pin(pin_type_t::out);
-        auto pin_c_in = node_c->add_pin(pin_type_t::in);
+        auto pin_c_in_1 = node_c->add_pin(pin_type_t::in);
+        auto pin_c_in_2 = node_c->add_pin(pin_type_t::in);
         auto pin_c_out = node_c->add_pin(pin_type_t::out);
         auto pin_d_in = node_d->add_pin(pin_type_t::in);
         auto pin_d_out = node_d->add_pin(pin_type_t::out);
-        auto pin_h_in_1 = node_h->add_pin(pin_type_t::in);
-        auto pin_h_in_2 = node_h->add_pin(pin_type_t::in);
-        auto pin_f_in = node_f->add_pin(pin_type_t::in);
-        auto pin_f_out = node_f->add_pin(pin_type_t::out);
-        auto pin_g_in_1 = node_g->add_pin(pin_type_t::in);
-        auto pin_g_in_2 = node_g->add_pin(pin_type_t::in);
-        auto pin_g_out = node_g->add_pin(pin_type_t::out);
         auto pin_e_in = node_e->add_pin(pin_type_t::in);
         auto pin_e_out = node_e->add_pin(pin_type_t::out);
-        auto pin_c_out_2 = node_c->add_pin(pin_type_t::out);
-        auto pin_a_in = node_a->add_pin(pin_type_t::in);
-        g.add_edge(pin_a_out_1, pin_b_in);
-        g.add_edge(pin_b_out, pin_c_in);
+        auto pin_f_in = node_f->add_pin(pin_type_t::in);
+        auto pin_g_in = node_g->add_pin(pin_type_t::in);
+        auto pin_g_out = node_g->add_pin(pin_type_t::out);
+        auto pin_h_in = node_h->add_pin(pin_type_t::in);
+        auto pin_h_out = node_h->add_pin(pin_type_t::out);
+        auto pin_i_in_1 = node_i->add_pin(pin_type_t::in);
+        auto pin_i_in_2 = node_i->add_pin(pin_type_t::in);
+        auto pin_i_out = node_i->add_pin(pin_type_t::out);
+        auto pin_j_out = node_j->add_pin(pin_type_t::out);
+        auto pin_k_in_1 = node_k->add_pin(pin_type_t::in);
+        auto pin_k_in_2 = node_k->add_pin(pin_type_t::in);
+        auto pin_k_out = node_k->add_pin(pin_type_t::out);
+        auto pin_l_in = node_l->add_pin(pin_type_t::in);
+
+        g.add_edge(pin_a_out, pin_c_in_1);
+        g.add_edge(pin_b_out, pin_c_in_2);
         g.add_edge(pin_c_out, pin_d_in);
-        g.add_edge(pin_d_out, pin_h_in_1);
-        g.add_edge(pin_a_out_2, pin_f_in);
-        g.add_edge(pin_f_out, pin_g_in_1);
-        g.add_edge(pin_g_out, pin_h_in_2);
-        g.add_edge(pin_a_out_3, pin_e_in);
-        g.add_edge(pin_e_out, pin_g_in_2);
-        //g.add_edge(pin_c_out_2, pin_a_in);
-        //g.add_edge(pin_b_out, pin_a_in);
+        g.add_edge(pin_d_out, pin_e_in);
+        g.add_edge(pin_d_out, pin_f_in);
+        g.add_edge(pin_d_out, pin_g_in);
+        g.add_edge(pin_e_out, pin_h_in);
+        g.add_edge(pin_g_out, pin_i_in_2);
+        g.add_edge(pin_h_out, pin_i_in_1);
+        g.add_edge(pin_i_out, pin_k_in_1);
+        g.add_edge(pin_j_out, pin_k_in_2);
+        g.add_edge(pin_k_out, pin_l_in);
+
         g.acyclic();
         set<edge_t*> non_tree_edges;
         g.feasible_tree(non_tree_edges);

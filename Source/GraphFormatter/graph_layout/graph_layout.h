@@ -58,7 +58,6 @@ namespace graph_layout
         pin_type_t type = pin_type_t::in;
         vector2_t offset{0, 0};
         node_t* owner = nullptr;
-        std::vector<pin_t*> link_to;
     };
 
     struct edge_t
@@ -90,6 +89,7 @@ namespace graph_layout
         void set_position(vector2_t p);
         pin_t* add_pin(pin_type_t type);
         std::vector<node_t*> get_direct_connected_nodes(std::function<bool(edge_t*)> filter) const;
+        ~node_t();
         node_t* clone() const;
     };
 
@@ -107,14 +107,15 @@ namespace graph_layout
 
         graph_t* clone() const;
         graph_t* clone(std::unordered_map<node_t*, node_t*>& nodes_map, std::unordered_map<pin_t*, pin_t*>& pins_map, std::unordered_map<edge_t*, edge_t*>& edges_map) const;
+        ~graph_t();
 
         node_t* add_node(graph_t* sub_graph = nullptr);
         node_t* add_node(const std::string& name, graph_t* sub_graph = nullptr);
         void remove_node(node_t* node);
 
-        edge_t* add_edge(pin_t* from, pin_t* to);
+        edge_t* add_edge(pin_t* tail, pin_t* head);
         void remove_edge(const edge_t* edge);
-        void remove_edge(pin_t* from, pin_t* to);
+        void remove_edge(pin_t* tail, pin_t* head);
         void invert_edge(edge_t* edge) const;
 
         std::vector<pin_t*> get_pins() const;
@@ -125,14 +126,14 @@ namespace graph_layout
         void set_position(vector2_t position);
         void acyclic();
         void feasible_tree(std::set<edge_t*>& non_tree_edges);
-
         static void test();
     private:
         void init_rank();
         void init_cut_values(std::set<edge_t*>& non_tree_edges);
         static void mark_head_or_tail(node_t* n, bool is_head, bool reset, const std::set<edge_t*>& non_tree_edges);
         static void add_to_weights(const edge_t* edge, int& head_to_tail_weight, int& tail_to_head_weight);
-        size_t tight_tree(std::set<node_t*>& tree_nodes, std::set<edge_t*>& non_tree_edges, edge_t** min_slack_non_tree_edge, node_t** incident_node) const;
+        size_t tight_tree(std::set<node_t*>& tree_nodes, std::set<edge_t*>& non_tree_edges) const;
+        static edge_t* find_min_incident_edge(const std::set<node_t*>& tree, const std::set<edge_t*>& non_tree_edges, node_t** incident_node);
         std::vector<node_t*> get_nodes_without_unscanned_in_edges(const std::set<node_t*>& visited, const std::set<edge_t*>& scanned_set) const;
     };
 }

@@ -129,6 +129,8 @@ public:
     void CalculateNodesSize();
     void CalculatePinsOffset();
 
+    const TArray<FFormatterNode*>& GetAllNodes() const;
+
 private:
     TArray<TSet<UEdGraphNode*>> FindIsolated();
     TArray<FFormatterEdge> GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes);

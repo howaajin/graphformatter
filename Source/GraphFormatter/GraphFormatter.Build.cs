@@ -16,6 +16,7 @@ namespace UnrealBuildTool.Rules
 			var EngineDir = Path.GetFullPath(Target.RelativeEnginePath);
 
 			PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Public"));
+            PublicIncludePaths.Add(ModuleDirectory);
 
             PrivateIncludePaths.AddRange(
                 new string[] {
