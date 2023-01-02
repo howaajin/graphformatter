@@ -416,16 +416,15 @@ void FFormatter::PlaceBlock()
 
 FFormatter& FFormatter::Instance()
 {
-    auto AutoSizeCommentModule = FModuleManager::Get().GetModule(FName("AutoSizeComments"));
-    if (AutoSizeCommentModule)
-    {
-        IsAutoSizeComment = true;
-    }
-
     static FFormatter Context;
     return Context;
 }
 
 FFormatter::FFormatter()
 {
+    auto AutoSizeCommentModule = FModuleManager::Get().GetModule(FName("AutoSizeComments"));
+    if (AutoSizeCommentModule)
+    {
+        IsAutoSizeComment = true;
+    }
 }
