@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 #include "FormatterStyle.h"
-#include "Interfaces/IPluginManager.h"
 #include "Styling/SlateStyleRegistry.h"
+#include "Styling/SlateStyle.h"
 
 void FFormatterStyle::Initialize()
 {

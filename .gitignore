@@ -13,3 +13,4 @@ Saved
 *.xcodeproj
 *.xcworkspace
 /*.user
+/Build

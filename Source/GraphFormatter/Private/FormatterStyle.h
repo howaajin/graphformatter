@@ -6,8 +6,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Styling/ISlateStyle.h"
-#include "Styling/SlateStyle.h"
 
 class FFormatterStyle
 {
