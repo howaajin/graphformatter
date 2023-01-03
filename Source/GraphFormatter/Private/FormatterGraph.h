@@ -6,6 +6,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Formatter.h"
 #include "EdGraph/EdGraph.h"
 #include "Layout/SlateRect.h"
 
@@ -55,6 +56,7 @@ public:
     FFormatterNode(UEdGraphNode* InNode);
     FFormatterNode(const FFormatterNode& Other);
     FFormatterNode();
+    static FFormatterNode* CreateDummy();
     ~FFormatterNode();
     void Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin, float Weight = 1);
     void Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetPin);
@@ -85,7 +87,7 @@ public:
     void UpdatePinsOffset(FVector2D Border);
     friend class FFormatterGraph;
 private:
-    float OrderValue;
+    float OrderValue{0.0f};
     FVector2D Position;
 };
 
@@ -93,7 +95,7 @@ class FFormatterGraph
 {
 public:
     void BuildIsolated();
-    FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes);
+    FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes, bool InIsParameterGroup = false);
     FFormatterGraph(const FFormatterGraph& Other);
     ~FFormatterGraph();
     void AddNode(FFormatterNode* InNode);
@@ -111,7 +113,7 @@ public:
     FSlateRect GetBorder() const;
 
     static TArray<FFormatterEdge*> GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode = nullptr);
-    static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true);
+    static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true, bool IsParameterGroup = false);
     static void CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order);
     static void CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer);
     static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
@@ -147,6 +149,7 @@ private:
     void DoOrderingSweep();
     void DoPositioning();
     FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes) const;
+    FFormatterNode* CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group) const;
     FFormatterNode* FindSourceNode() const;
     FFormatterNode* FindSinkNode() const;
     FFormatterNode* FindMaxDegreeDiffNode() const;
@@ -162,4 +165,5 @@ private:
     TArray<FFormatterGraph*> IsolatedGraphs;
     FSlateRect TotalBound;
     FSlateRect Border = FSlateRect(0, 0, 0, 0);
+    bool IsParameterGroup = false;
 };

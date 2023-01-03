@@ -8,20 +8,22 @@
 UFormatterSettings::UFormatterSettings()
     : AutoDetectGraphEditor(false)
     , SupportedAssetTypes({
-                {"Blueprint", true},
-                {"AnimBlueprint", true},
-                {"WidgetBlueprint", true},
-                {"BehaviorTree", true},
-                {"Material", true},
-                {"SoundCue", true},
-                {"NiagaraScript", true},
-                {"MetaSoundSource", true},
-        })
+        {"Blueprint", true},
+        {"AnimBlueprint", true},
+        {"WidgetBlueprint", true},
+        {"BehaviorTree", true},
+        {"Material", true},
+        {"SoundCue", true},
+        {"NiagaraScript", true},
+        {"MetaSoundSource", true},
+    })
     , DisableToolbar(false)
     , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
     , CommentBorder(45)
     , HorizontalSpacing(100)
     , VerticalSpacing(80)
+    , bEnableBlueprintParameterGroup(true)
+    , SpacingFactorOfParameterGroup(0.314)
     , MaxOrderingIterations(10)
 {
 }

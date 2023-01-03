@@ -107,7 +107,7 @@ void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
     }
 }
 
-bool FFormatter::IsAssetSupported(const UObject* Object) const
+bool FFormatter::IsAssetSupported(const UObject* Object) 
 {
     const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
     if (const bool* Enabled = Settings->SupportedAssetTypes.Find(Object->GetClass()->GetName()))
@@ -259,9 +259,21 @@ FSlateRect FFormatter::GetNodesBound(const TSet<UEdGraphNode*> Nodes) const
     return Bound;
 }
 
-bool FFormatter::IsExecPin(const UEdGraphPin* Pin) const
+bool FFormatter::IsExecPin(const UEdGraphPin* Pin)
 {
     return Pin->PinType.PinCategory == "Exec";
+}
+
+bool FFormatter::HasExecPin(const UEdGraphNode* Node)
+{
+    for (auto Pin : Node->Pins)
+    {
+        if (IsExecPin(Pin))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool FFormatter::PreCommand()
@@ -497,8 +509,7 @@ FFormatter& FFormatter::Instance()
 
 FFormatter::FFormatter()
 {
-    auto AutoSizeCommentModule = FModuleManager::Get().GetModule(FName("AutoSizeComments"));
-    if (AutoSizeCommentModule)
+    if (FModuleManager::Get().GetModule(FName("AutoSizeComments")))
     {
         IsAutoSizeComment = true;
     }

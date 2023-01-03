@@ -125,11 +125,17 @@ namespace graph_layout
         void translate(vector2_t offset);
         void set_position(vector2_t position);
         void acyclic();
+        void rank();
         void feasible_tree(std::set<edge_t*>& non_tree_edges);
         static void test();
+
     private:
         void init_rank();
-        void init_cut_values(std::set<edge_t*>& non_tree_edges);
+        void calculate_cut_values(std::set<edge_t*>& non_tree_edges);
+        edge_t* leave_edge(const std::set<edge_t*>& non_tree_edges);
+        edge_t* enter_edge(edge_t* edge, std::set<edge_t*>& non_tree_edges);
+        void exchange(edge_t* tree_edge, edge_t* non_tree_edge, std::set<edge_t*>& non_tree_edges);
+        void normalize();
         static void mark_head_or_tail(node_t* n, bool is_head, bool reset, const std::set<edge_t*>& non_tree_edges);
         static void add_to_weights(const edge_t* edge, int& head_to_tail_weight, int& tail_to_head_weight);
         size_t tight_tree(std::set<node_t*>& tree_nodes, std::set<edge_t*>& non_tree_edges) const;

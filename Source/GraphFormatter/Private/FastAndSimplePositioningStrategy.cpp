@@ -208,13 +208,21 @@ void FFastAndSimplePositioningStrategy::PlaceBlock(FFormatterNode* BlockRoot)
                 {
                     AdjacencyHeight = Adjacency->Size.Y;
                     NodeHeight = Node->Size.Y;
-                    Spacing = Settings.HorizontalSpacing;
+                    Spacing = Settings.VerticalSpacing;
+                    if(IsParameterGroup)
+                    {
+                        Spacing *= Settings.SpacingFactorOfParameterGroup.Y;
+                    }
                 }
                 else
                 {
                     AdjacencyHeight = Adjacency->Size.X;
                     NodeHeight = Node->Size.X;
                     Spacing = Settings.HorizontalSpacing;
+                    if (IsParameterGroup)
+                    {
+                        Spacing *= Settings.SpacingFactorOfParameterGroup.X;
+                    }
                 }
 
                 const auto PrevBlockRoot = RootMap[Adjacency];
@@ -396,10 +404,12 @@ void FFastAndSimplePositioningStrategy::DoOnePass()
     DoHorizontalCompaction();
 }
 
-FFastAndSimplePositioningStrategy::FFastAndSimplePositioningStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection)
-    : IPositioningStrategy(InLayeredNodes), IsHorizontalDirection(IsHorizontalDirection)
+FFastAndSimplePositioningStrategy::FFastAndSimplePositioningStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection, bool IsParameterGroup)
+    : IPositioningStrategy(InLayeredNodes)
+    , IsHorizontalDirection(IsHorizontalDirection)
+    , IsParameterGroup(IsParameterGroup)
 {
-    const auto LayersBound = FFormatterGraph::CalculateLayersBound(InLayeredNodes, IsHorizontalDirection);
+    const auto LayersBound = FFormatterGraph::CalculateLayersBound(InLayeredNodes, IsHorizontalDirection, IsParameterGroup);
     FFormatterNode* FirstNode = InLayeredNodes[0][0];
     const FVector2D OldPosition = FirstNode->GetPosition();
     Initialize();

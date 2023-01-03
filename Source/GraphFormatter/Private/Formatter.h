@@ -25,8 +25,9 @@ struct FFormatter
     void SetZoomLevelTo11Scale() const;
     void RestoreZoomLevel() const;
 
-    bool IsAssetSupported(const UObject* Object) const;
-    bool IsExecPin(const UEdGraphPin* Pin) const;
+    static bool IsAssetSupported(const UObject* Object);
+    static bool IsExecPin(const UEdGraphPin* Pin);
+    static bool HasExecPin(const UEdGraphNode* Node);
 
     SGraphEditor* FindGraphEditorForTopLevelWindow() const;
     SGraphEditor* FindGraphEditorByCursor() const;
@@ -48,6 +49,7 @@ struct FFormatter
     void PlaceBlock();
 
     static FFormatter& Instance();
+
 private:
     FFormatter();
     FFormatter(FFormatter const&) = delete;

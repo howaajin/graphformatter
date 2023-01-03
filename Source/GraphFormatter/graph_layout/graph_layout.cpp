@@ -8,6 +8,7 @@
 #include <limits>
 #include <memory>
 #include <algorithm>
+#include <cassert>
 
 namespace graph_layout
 {
@@ -411,6 +412,19 @@ namespace graph_layout
         }
     }
 
+    void graph_t::rank()
+    {
+        set<edge_t*> non_tree_edges;
+        feasible_tree(non_tree_edges);
+        calculate_cut_values(non_tree_edges);
+        while (edge_t* e = leave_edge(non_tree_edges))
+        {
+            edge_t* f = enter_edge(e, non_tree_edges);
+            exchange(e, f, non_tree_edges);
+        }
+        normalize();
+    }
+
     void graph_t::feasible_tree(set<edge_t*>& non_tree_edges)
     {
         init_rank();
@@ -456,7 +470,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::init_cut_values(set<edge_t*>& non_tree_edges)
+    void graph_t::calculate_cut_values(set<edge_t*>& non_tree_edges)
     {
         set<node_t*> visited_nodes;
         for (auto& [fst, edge] : edges)
@@ -483,6 +497,65 @@ namespace graph_layout
                 add_to_weights(edge2, head_to_tail_weight, tail_to_head_weight);
             }
             edge->cut_value = edge->weight + tail_to_head_weight - head_to_tail_weight;
+        }
+    }
+
+    edge_t* graph_t::leave_edge(const std::set<edge_t*>& non_tree_edges)
+    {
+        for (auto [fst, edge] : edges)
+        {
+            if (edge->cut_value < 0)
+            {
+                return edge;
+            }
+        }
+        return nullptr;
+    }
+
+    edge_t* graph_t::enter_edge(edge_t* edge, std::set<edge_t*>& non_tree_edges)
+    {
+        non_tree_edges.insert(edge);
+        auto n = edge->tail->owner;
+        mark_head_or_tail(n, false, true, non_tree_edges);
+        n = edge->head->owner;
+        mark_head_or_tail(n, true, false, non_tree_edges);
+        int slack = std::numeric_limits<int>::max();
+        edge_t* min_slack_edge = nullptr;
+        for (auto e : non_tree_edges)
+        {
+            if (e->tail->owner->belongs_to_head && e->head->owner->belongs_to_tail)
+            {
+                if (e->slack() < slack)
+                {
+                    slack = e->slack();
+                    min_slack_edge = e;
+                }
+            }
+        }
+        assert(min_slack_edge!=nullptr);
+        return min_slack_edge;
+    }
+
+    void graph_t::exchange(edge_t* tree_edge, edge_t* non_tree_edge, std::set<edge_t*>& non_tree_edges)
+    {
+        non_tree_edges.erase(tree_edge);
+        non_tree_edges.insert(non_tree_edge);
+        calculate_cut_values(non_tree_edges);
+    }
+
+    void graph_t::normalize()
+    {
+        int min_rank = std::numeric_limits<int>::max();
+        for (auto n : nodes)
+        {
+            if (n->rank < min_rank)
+            {
+                min_rank = n->rank;
+            }
+        }
+        for (auto n : nodes)
+        {
+            n->rank -= min_rank;
         }
     }
 
@@ -689,6 +762,6 @@ namespace graph_layout
 
         g.acyclic();
         set<edge_t*> non_tree_edges;
-        g.feasible_tree(non_tree_edges);
+        g.rank();
     }
 }

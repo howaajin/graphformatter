@@ -53,6 +53,15 @@ public:
     UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
     int32 VerticalSpacing;
 
+
+    /** Whether to enable parameter grouping in Blueprint Editor */
+    UPROPERTY(config, EditAnywhere, Category = "Options")
+    bool bEnableBlueprintParameterGroup;
+
+    /* Spacing factor that multiply with HorizontalSpacing and VerticalSpacing in parameter group */
+    UPROPERTY(config, EditAnywhere, Category = "Options", meta = (EditCondition = "bEnableBlueprintParameterGroup"))
+    FVector2D SpacingFactorOfParameterGroup;
+
     /** Vertex ordering max iterations */
     UPROPERTY(config, EditAnywhere, Category = "Performance", meta = (ClampMin = 0, ClampMax = 100))
     int32 MaxOrderingIterations;

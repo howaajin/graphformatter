@@ -101,22 +101,28 @@ FFormatterNode::FFormatterNode()
     , PositioningPriority(INT_MAX)
     , Position(FVector2D::ZeroVector)
 {
+}
+
+FFormatterNode* FFormatterNode::CreateDummy()
+{
+    auto DummyNode = new FFormatterNode();
     auto InPin = new FFormatterPin;
     InPin->Guid = FGuid::NewGuid();
     InPin->OriginalPin = nullptr;
     InPin->Direction = EGPD_Input;
-    InPin->OwningNode = this;
+    InPin->OwningNode = DummyNode;
     InPin->NodeOffset = FVector2D::ZeroVector;
 
     auto OutPin = new FFormatterPin;
     OutPin->Guid = FGuid::NewGuid();
     OutPin->OriginalPin = nullptr;
     OutPin->Direction = EGPD_Output;
-    OutPin->OwningNode = this;
+    OutPin->OwningNode = DummyNode;
     OutPin->NodeOffset = FVector2D::ZeroVector;
 
-    InPins.Add(InPin);
-    OutPins.Add(OutPin);
+    DummyNode->InPins.Add(InPin);
+    DummyNode->OutPins.Add(OutPin);
+    return DummyNode;
 }
 
 void FFormatterNode::Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin, float Weight)
@@ -567,6 +573,38 @@ TArray<FFormatterNode*> FFormatterGraph::GetNodesGreaterThan(int32 i, TSet<FForm
     return Result;
 }
 
+TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded)
+{
+    TSet<UEdGraphNode*> VisitedNodes;
+    TArray<UEdGraphNode*> Stack;
+    Stack.Push(Node);
+    while (!Stack.IsEmpty())
+    {
+        auto StackNode = Stack.Pop();
+        VisitedNodes.Add(StackNode);
+        for (auto Pin : StackNode->Pins)
+        {
+            if (Pin->Direction != EGPD_Input || FFormatter::IsExecPin(Pin))
+            {
+                continue;
+            }
+            for (auto LinkedPin : Pin->LinkedTo)
+            {
+                auto LinkedNode = LinkedPin->GetOwningNodeUnchecked();
+                if (!Included.Contains(LinkedNode) ||
+                    VisitedNodes.Contains(LinkedNode) ||
+                    Excluded.Contains(LinkedNode) ||
+                    FFormatter::HasExecPin(LinkedNode))
+                {
+                    continue;
+                }
+                Stack.Add(LinkedNode);
+            }
+        }
+    }
+    return VisitedNodes;
+}
+
 void FFormatterGraph::BuildNodes(TSet<UEdGraphNode*> SelectedNodes)
 {
     while (true)
@@ -601,6 +639,30 @@ void FFormatterGraph::BuildNodes(TSet<UEdGraphNode*> SelectedNodes)
         }
     }
 
+    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+    if (FFormatter::Instance().IsBlueprint && !IsParameterGroup && Settings.bEnableBlueprintParameterGroup)
+    {
+        TArray<UEdGraphNode*> ExecNodes;
+        for (auto Node : SelectedNodes)
+        {
+            if (FFormatter::HasExecPin(Node))
+            {
+                ExecNodes.Add(Node);
+            }
+        }
+        for(auto Node: ExecNodes)
+        {
+            TSet<UEdGraphNode*> Group;
+            TSet<UEdGraphNode*> Excluded;
+            Group = FindParamGroupForExecNode(Node, SelectedNodes, Excluded);
+            if (Group.Num() >= 2)
+            {
+                FFormatterNode* CollapsedNode = CollapseGroup(Node, Group);
+                AddNode(CollapsedNode);
+                SelectedNodes = SelectedNodes.Difference(Group);
+            }
+        }
+    }
     for (auto Node : SelectedNodes)
     {
         FFormatterNode* NodeData = new FFormatterNode(Node);
@@ -752,6 +814,16 @@ FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, 
     return Node;
 }
 
+FFormatterNode* FFormatterGraph::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group) const
+{
+    FFormatterNode* Node = new FFormatterNode();
+    Node->OriginalNode = MainNode;
+    FFormatterGraph* SubGraph = new FFormatterGraph(Group, true);
+    Node->SetSubGraph(SubGraph);
+    SubGraph->SetBorder(0, 0, 0, 0);
+    return Node;
+}
+
 void FFormatterGraph::AddNode(FFormatterNode* InNode)
 {
     Nodes.Add(InNode);
@@ -892,7 +964,8 @@ void FFormatterGraph::BuildIsolated()
     }
 }
 
-FFormatterGraph::FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes)
+FFormatterGraph::FFormatterGraph(const TSet<UEdGraphNode*>& SelectedNodes, bool InIsParameterGroup)
+    : IsParameterGroup(InIsParameterGroup)
 {
     BuildNodesAndEdges(SelectedNodes);
     BuildIsolated();
@@ -1061,7 +1134,7 @@ TArray<TArray<FFormatterNode*>> GetLayeredListFromNewGraph(const FFormatterGraph
     TMap<graph_layout::node_t*, FFormatterNode*> NodesMap;
     for (auto Node : Nodes)
     {
-        auto n = g.add_node(TCHAR_TO_ANSI(*Node->OriginalNode->GetName()));
+        auto n = g.add_node();
         for (auto Pin : Node->InPins)
         {
             auto pin = n->add_pin(graph_layout::pin_type_t::in);
@@ -1169,7 +1242,7 @@ void FFormatterGraph::AddDummyNodes()
             for (auto Edge : LongEdges)
             {
                 Node->Disconnect(Edge->From, Edge->To);
-                auto dummyNode = new FFormatterNode();
+                auto dummyNode = FFormatterNode::CreateDummy();
                 AddNode(dummyNode);
                 Node->Connect(Edge->From, dummyNode->InPins[0], Edge->Weight);
                 dummyNode->Connect(dummyNode->InPins[0], Edge->From, Edge->Weight);
@@ -1219,7 +1292,7 @@ TArray<FFormatterEdge*> FFormatterGraph::GetEdgeBetweenTwoLayer(const TArray<FFo
     return Result;
 }
 
-TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection)
+TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection, bool IsParameterGroup)
 {
     TArray<FSlateRect> LayersBound;
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
@@ -1228,10 +1301,21 @@ TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatte
     if (IsHorizontalDirection)
     {
         Spacing = FVector2D(Settings.HorizontalSpacing, 0);
+        if (IsParameterGroup)
+        {
+            Spacing *= Settings.SpacingFactorOfParameterGroup.X;
+        }
     }
     else
     {
         Spacing = FVector2D(0, Settings.VerticalSpacing);
+        if (IsParameterGroup)
+        {
+            if (IsParameterGroup)
+            {
+                Spacing *= Settings.SpacingFactorOfParameterGroup.X;
+            }
+        }
     }
     for (int32 i = 0; i < InLayeredNodes.Num(); i++)
     {
@@ -1319,7 +1403,7 @@ void FFormatterGraph::DoPositioning()
 
     if (FFormatter::Instance().IsVerticalLayout)
     {
-        FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, false);
+        FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, false, IsParameterGroup);
         TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
         return;
     }
@@ -1331,7 +1415,7 @@ void FFormatterGraph::DoPositioning()
     }
     else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
     {
-        FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList);
+        FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, true, IsParameterGroup);
         TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
     }
     else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::ELayerSweep)
