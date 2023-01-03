@@ -15,13 +15,80 @@
 #include "SGraphNodeComment.h"
 #include "SGraphPanel.h"
 
+/** Hack start. Access to private member legally. */
 #include "PrivateAccessor.h"
 
-struct FAccess_SGraphNodeResizable_UserSize
+DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SGraphPanel_ZoomLevels, SNodePanel, TUniquePtr<FZoomLevelsContainer>, ZoomLevels)
+DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SGraphNodeResizable_UserSize, SGraphNodeResizable, FVector2D, UserSize);
+DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SNodePanel_CurrentLOD, SNodePanel, EGraphRenderingLOD::Type, CurrentLOD);
+
+static TUniquePtr<FZoomLevelsContainer> TopZoomLevels;
+static TUniquePtr<FZoomLevelsContainer> TempZoomLevels;
+static EGraphRenderingLOD::Type OldLOD;
+
+class FTopZoomLevelContainer : public FZoomLevelsContainer
 {
-    using MemberType = FVector2D SGraphNodeResizable::*;
+public:
+    virtual float GetZoomAmount(int32 InZoomLevel) const override { return 1.0f; }
+    virtual int32 GetNearestZoomLevel(float InZoomAmount) const override { return 0; }
+    virtual FText GetZoomText(int32 InZoomLevel) const override { return FText::FromString(TEXT("1:1")); }
+    virtual int32 GetNumZoomLevels() const override { return 1; }
+    virtual int32 GetDefaultZoomLevel() const override { return 0; }
+    virtual EGraphRenderingLOD::Type GetLOD(int32 InZoomLevel) const override { return EGraphRenderingLOD::DefaultDetail; }
 };
-template struct FPrivateRob<FAccess_SGraphNodeResizable_UserSize, &SGraphNodeResizable::UserSize>;
+
+// Tick all nodes manually
+static void TickWidgetRecursively(SWidget* Widget)
+{
+    Widget->GetChildren();
+    if (auto Children = Widget->GetChildren())
+    {
+        for (int32 ChildIndex = 0; ChildIndex < Children->Num(); ++ChildIndex)
+        {
+            auto ChildWidget = &Children->GetChildAt(ChildIndex).Get();
+            TickWidgetRecursively(ChildWidget);
+        }
+    }
+    Widget->Tick(Widget->GetCachedGeometry(), FSlateApplication::Get().GetCurrentTime(), 0);
+}
+
+// Set the GraphPanel ZoomLevel to 1:1 before formatting the graph.
+// From 1:1 scale to -5 scale, the result will be consistent but
+// can see slight variation due to the round-off error of floating point number
+void FFormatter::SetZoomLevelTo11Scale() const
+{
+    if (!TopZoomLevels.IsValid())
+    {
+        TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
+    }
+    auto& ZoomLevels = CurrentPanel->*FPrivateAccessor<FAccess_SGraphPanel_ZoomLevels>::Member;
+    TempZoomLevels = MoveTemp(ZoomLevels);
+    ZoomLevels = MoveTemp(TopZoomLevels);
+    OldLOD = CurrentPanel->GetCurrentLOD();
+    CurrentPanel->*FPrivateAccessor<FAccess_SNodePanel_CurrentLOD>::Member = EGraphRenderingLOD::DefaultDetail;
+    auto Nodes = GetAllNodes();
+    for (auto Node : Nodes)
+    {
+        auto GraphNode = GetWidget(Node);
+        if (GraphNode != nullptr)
+        {
+            TickWidgetRecursively(GraphNode);
+        }
+    }
+    CurrentPanel->SlatePrepass();
+}
+
+void FFormatter::RestoreZoomLevel() const
+{
+    if (!TopZoomLevels.IsValid())
+    {
+        TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
+    }
+    auto& ZoomLevels = CurrentPanel->*FPrivateAccessor<FAccess_SGraphPanel_ZoomLevels>::Member;
+    ZoomLevels = MoveTemp(TempZoomLevels);
+    CurrentPanel->*FPrivateAccessor<FAccess_SNodePanel_CurrentLOD>::Member = OldLOD;
+}
+/** Hack end  */
 
 void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
 {
@@ -213,7 +280,13 @@ bool FFormatter::PreCommand()
     {
         return false;
     }
+    SetZoomLevelTo11Scale();
     return true;
+}
+
+void FFormatter::PostCommand()
+{
+    RestoreZoomLevel();
 }
 
 void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const
@@ -358,6 +431,7 @@ void FFormatter::Format()
             }
         }
     }
+    PostCommand();
 }
 
 void FFormatter::PlaceBlock()
@@ -412,6 +486,7 @@ void FFormatter::PlaceBlock()
         FVector2D Offset = LinkedCenterFrom - LinkedCenterTo;
         Translate(ConnectedNodesRight, Offset);
     }
+    PostCommand();
 }
 
 FFormatter& FFormatter::Instance()
