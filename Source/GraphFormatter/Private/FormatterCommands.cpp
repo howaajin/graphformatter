@@ -9,9 +9,9 @@
 
 void FFormatterCommands::RegisterCommands()
 {
-    UI_COMMAND(FormatGraph, "Format Graph", "Auto format graph using Layered Graph Drawing algorithm", EUserInterfaceActionType::Button, FInputChord(EKeys::F, false, false, true, false));
+    UI_COMMAND(FormatGraph, "Format Graph", "Auto format graph using Layered Graph Drawing algorithm", EUserInterfaceActionType::Button, FInputChord(EKeys::F, true, false, false, false));
     UI_COMMAND(StraightenConnections, "Straight Lines", "Straighten connections", EUserInterfaceActionType::ToggleButton, FInputChord());
-    UI_COMMAND(PlaceBlock, "Place block", "Place selected nodes to appropriate position", EUserInterfaceActionType::Button, FInputChord(EKeys::E, false, true, false, false));
+    UI_COMMAND(PlaceBlock, "Place block", "Place selected nodes to appropriate position", EUserInterfaceActionType::Button, FInputChord(EKeys::E, true, false, false, false));
 }
 
 #undef LOCTEXT_NAMESPACE
