@@ -93,6 +93,26 @@ namespace graph_layout
         node_t* clone() const;
     };
 
+    struct tree_t
+    {
+        std::set<edge_t*> tree_edges;
+        std::set<edge_t*> non_tree_edges;
+        std::set<node_t*> nodes;
+        edge_t* find_min_incident_edge(node_t** incident_node);
+        void tighten() const;
+        tree_t tight_sub_tree() const;
+        edge_t* leave_edge() const;
+        edge_t* enter_edge(edge_t* edge);
+        void exchange(edge_t* e, edge_t* f);
+        void calculate_cut_values();
+        void update_non_tree_edges(std::set<edge_t*> all_edges);
+    private:
+        void reset_head_or_tail() const;
+        void split_to_head_tail(edge_t* edge);
+        void mark_head_or_tail(node_t* n, edge_t* cut_edge, bool is_head);
+        static void add_to_weights(const edge_t* edge, int& head_to_tail_weight, int& tail_to_head_weight);
+    };
+
     struct graph_t
     {
         rect_t bound{0, 0, 0, 0};
@@ -126,20 +146,13 @@ namespace graph_layout
         void set_position(vector2_t position);
         void acyclic();
         void rank();
-        void feasible_tree(std::set<edge_t*>& non_tree_edges);
+        tree_t feasible_tree();
+        std::string generate_test_code();
         static void test();
-
     private:
         void init_rank();
-        void calculate_cut_values(std::set<edge_t*>& non_tree_edges);
-        edge_t* leave_edge(const std::set<edge_t*>& non_tree_edges);
-        edge_t* enter_edge(edge_t* edge, std::set<edge_t*>& non_tree_edges);
-        void exchange(edge_t* tree_edge, edge_t* non_tree_edge, std::set<edge_t*>& non_tree_edges);
         void normalize();
-        static void mark_head_or_tail(node_t* n, bool is_head, bool reset, const std::set<edge_t*>& non_tree_edges);
-        static void add_to_weights(const edge_t* edge, int& head_to_tail_weight, int& tail_to_head_weight);
-        size_t tight_tree(std::set<node_t*>& tree_nodes, std::set<edge_t*>& non_tree_edges) const;
-        static edge_t* find_min_incident_edge(const std::set<node_t*>& tree, const std::set<edge_t*>& non_tree_edges, node_t** incident_node);
+        tree_t tight_tree() const;
         std::vector<node_t*> get_nodes_without_unscanned_in_edges(const std::set<node_t*>& visited, const std::set<edge_t*>& scanned_set) const;
     };
 }

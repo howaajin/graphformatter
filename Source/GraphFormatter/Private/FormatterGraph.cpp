@@ -1158,8 +1158,10 @@ TArray<TArray<FFormatterNode*>> GetLayeredListFromNewGraph(const FFormatterGraph
             g.add_edge(PinsMap[Edge->From], PinsMap[Edge->To]);
         }
     }
+
     std::set<graph_layout::edge_t*> non_tree_edges;
-    g.feasible_tree(non_tree_edges);
+    //g.feasible_tree(non_tree_edges);
+    g.rank();
     TArray<TArray<FFormatterNode*>> LayeredList;
     TMap<int, TArray<FFormatterNode*>> LayerMap;
     for (auto n : g.nodes)

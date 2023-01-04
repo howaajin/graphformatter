@@ -9,6 +9,9 @@
 #include <memory>
 #include <algorithm>
 #include <cassert>
+#include <sstream>
+#include <iostream>
+#include <fstream>
 
 namespace graph_layout
 {
@@ -414,37 +417,81 @@ namespace graph_layout
 
     void graph_t::rank()
     {
-        set<edge_t*> non_tree_edges;
-        feasible_tree(non_tree_edges);
-        calculate_cut_values(non_tree_edges);
-        while (edge_t* e = leave_edge(non_tree_edges))
+        tree_t tree = feasible_tree();
+        tree.calculate_cut_values();
+        while (edge_t* e = tree.leave_edge())
         {
-            edge_t* f = enter_edge(e, non_tree_edges);
-            exchange(e, f, non_tree_edges);
+            edge_t* f = tree.enter_edge(e);
+            tree.exchange(e, f);
         }
         normalize();
     }
 
-    void graph_t::feasible_tree(set<edge_t*>& non_tree_edges)
+    tree_t graph_t::feasible_tree()
     {
         init_rank();
-        set<node_t*> tree_nodes;
-        while (tight_tree(tree_nodes, non_tree_edges) < nodes.size())
+        for (;;)
         {
+            tree_t tree = tight_tree();
+            if (tree.nodes.size() == nodes.size())
+            {
+                return tree;
+            }
             node_t* incident_node;
-            edge_t* e = find_min_incident_edge(tree_nodes, non_tree_edges, &incident_node);
+            edge_t* e = tree.find_min_incident_edge(&incident_node);
             auto delta = e->slack();
             if (e->head->owner == incident_node)
             {
                 delta = -delta;
             }
-            for (auto n : tree_nodes)
+            for (auto n : tree.nodes)
             {
                 n->rank = n->rank + delta;
             }
-            tree_nodes.clear();
-            non_tree_edges.clear();
         }
+    }
+
+    std::string graph_t::generate_test_code()
+    {
+        stringstream ss;
+        ss << "graph_t g;" << std::endl;
+        for (auto n : nodes)
+        {
+            string node_name = n->name;
+            replace(node_name.begin(), node_name.end(), ' ', '_');
+            ss << "auto node_" << node_name << " = g.add_node(\"" << node_name << "\");" << std::endl;
+            int pin_index = 0;
+            for (auto p : n->pins)
+            {
+                string in_or_out = p->type == pin_type_t::in ? "in" : "out";
+                ss << "auto pin_" << node_name << "_" << in_or_out << pin_index << " = node_" << node_name << "->add_pin(pin_type_t::" << in_or_out << ");" << endl;
+                pin_index ++;
+            }
+            ss << endl;
+        }
+        auto find_pin_index = [](node_t* n, pin_t* p)
+        {
+            for (int i = 0; i < n->pins.size(); i++)
+            {
+                if (n->pins[i] == p) return i;
+            }
+            return -1;
+        };
+        for (auto [k, edge] : edges)
+        {
+            auto tail_name = edge->tail->owner->name;
+            auto head_name = edge->head->owner->name;
+
+            replace(tail_name.begin(), tail_name.end(), ' ', '_');
+            replace(head_name.begin(), head_name.end(), ' ', '_');
+            ss << "g.add_edge(" << "pin_" << tail_name << "_out" << find_pin_index(edge->tail->owner, edge->tail)
+                << ", " << "pin_" << head_name << "_in" << find_pin_index(edge->head->owner, edge->head) << ");" << endl;
+        }
+        ofstream ofile;
+        ofile.open("test.cpp");
+        ofile << ss.str();
+        ofile.close();
+        return ss.str();
     }
 
     void graph_t::init_rank()
@@ -470,79 +517,6 @@ namespace graph_layout
         }
     }
 
-    void graph_t::calculate_cut_values(set<edge_t*>& non_tree_edges)
-    {
-        set<node_t*> visited_nodes;
-        for (auto& [fst, edge] : edges)
-        {
-            if (non_tree_edges.find(edge) != non_tree_edges.end())
-            {
-                continue;
-            }
-            non_tree_edges.insert(edge);
-
-            auto n = edge->tail->owner;
-            mark_head_or_tail(n, false, true, non_tree_edges);
-            n = edge->head->owner;
-            mark_head_or_tail(n, true, false, non_tree_edges);
-            non_tree_edges.erase(edge);
-            int head_to_tail_weight = 0;
-            int tail_to_head_weight = 0;
-            for (auto& [fst2, edge2] : edges)
-            {
-                if (edge2 == edge)
-                {
-                    continue;
-                }
-                add_to_weights(edge2, head_to_tail_weight, tail_to_head_weight);
-            }
-            edge->cut_value = edge->weight + tail_to_head_weight - head_to_tail_weight;
-        }
-    }
-
-    edge_t* graph_t::leave_edge(const std::set<edge_t*>& non_tree_edges)
-    {
-        for (auto [fst, edge] : edges)
-        {
-            if (edge->cut_value < 0)
-            {
-                return edge;
-            }
-        }
-        return nullptr;
-    }
-
-    edge_t* graph_t::enter_edge(edge_t* edge, std::set<edge_t*>& non_tree_edges)
-    {
-        non_tree_edges.insert(edge);
-        auto n = edge->tail->owner;
-        mark_head_or_tail(n, false, true, non_tree_edges);
-        n = edge->head->owner;
-        mark_head_or_tail(n, true, false, non_tree_edges);
-        int slack = std::numeric_limits<int>::max();
-        edge_t* min_slack_edge = nullptr;
-        for (auto e : non_tree_edges)
-        {
-            if (e->tail->owner->belongs_to_head && e->head->owner->belongs_to_tail)
-            {
-                if (e->slack() < slack)
-                {
-                    slack = e->slack();
-                    min_slack_edge = e;
-                }
-            }
-        }
-        assert(min_slack_edge!=nullptr);
-        return min_slack_edge;
-    }
-
-    void graph_t::exchange(edge_t* tree_edge, edge_t* non_tree_edge, std::set<edge_t*>& non_tree_edges)
-    {
-        non_tree_edges.erase(tree_edge);
-        non_tree_edges.insert(non_tree_edge);
-        calculate_cut_values(non_tree_edges);
-    }
-
     void graph_t::normalize()
     {
         int min_rank = std::numeric_limits<int>::max();
@@ -559,62 +533,10 @@ namespace graph_layout
         }
     }
 
-    void graph_t::mark_head_or_tail(node_t* n, bool is_head, bool reset, const std::set<edge_t*>& non_tree_edges)
+    tree_t graph_t::tight_tree() const
     {
-        set<node_t*> visited_nodes;
+        tree_t tree;
         vector<node_t*> stack;
-        stack.push_back(n);
-        while (!stack.empty())
-        {
-            auto node = stack.back();
-            stack.pop_back();
-            visited_nodes.insert(node);
-            if (is_head)
-            {
-                node->belongs_to_head = true;
-                if (reset) node->belongs_to_tail = false;
-            }
-            else
-            {
-                node->belongs_to_tail = true;
-                if (reset) node->belongs_to_head = false;
-            }
-            auto direct_connected_nodes = node->get_direct_connected_nodes([&non_tree_edges](edge_t* e)
-            {
-                if (non_tree_edges.find(e) != non_tree_edges.end())
-                {
-                    return false;
-                }
-                return true;
-            });
-            for (auto direct_connected : direct_connected_nodes)
-            {
-                if (visited_nodes.find(direct_connected) == visited_nodes.end())
-                {
-                    stack.push_back(direct_connected);
-                }
-            }
-        }
-    }
-
-    void graph_t::add_to_weights(const edge_t* edge, int& head_to_tail_weight, int& tail_to_head_weight)
-    {
-        auto tail = edge->tail->owner;
-        auto head = edge->head->owner;
-        if (tail->belongs_to_tail && head->belongs_to_head)
-        {
-            tail_to_head_weight += edge->weight;
-        }
-        if (tail->belongs_to_head && head->belongs_to_tail)
-        {
-            head_to_tail_weight += edge->weight;
-        }
-    }
-
-    size_t graph_t::tight_tree(std::set<node_t*>& tree_nodes, std::set<edge_t*>& non_tree_edges) const
-    {
-        vector<node_t*> stack;
-        set<node_t*> non_tree_nodes;
         int min_slack = std::numeric_limits<int>::max();
         if (min_ranking_dummy_node)
         {
@@ -634,41 +556,47 @@ namespace graph_layout
         while (!stack.empty())
         {
             auto n = stack.back();
-            tree_nodes.insert(n);
+            tree.nodes.insert(n);
             stack.pop_back();
-            auto connected_nodes = n->get_direct_connected_nodes([&min_slack, n ,&non_tree_edges, &non_tree_nodes](edge_t* e)
+            auto connected_nodes = n->get_direct_connected_nodes([&min_slack, n ,&tree](edge_t* e)
             {
                 if (e->slack() != 0)
                 {
-                    non_tree_edges.insert(e);
                     if (e->slack() < min_slack)
                     {
                         min_slack = e->slack();
                     }
                     return false;
                 }
+                tree.tree_edges.insert(e);
                 return true;
             });
             for (auto connected_node : connected_nodes)
             {
-                if (tree_nodes.find(connected_node) == tree_nodes.end())
+                if (tree.nodes.find(connected_node) == tree.nodes.end())
                 {
                     stack.push_back(connected_node);
                 }
             }
         }
-        return tree_nodes.size();
+        set<edge_t*> all_edges;
+        for (auto [fst, edge] : edges)
+        {
+            all_edges.insert(edge);
+        }
+        tree.update_non_tree_edges(all_edges);
+        return tree;
     }
 
-    edge_t* graph_t::find_min_incident_edge(const std::set<node_t*>& tree, const std::set<edge_t*>& non_tree_edges, node_t** incident_node)
+    edge_t* tree_t::find_min_incident_edge(node_t** incident_node)
     {
         edge_t* min_slack_edge = nullptr;
         int slack = std::numeric_limits<int>::max();
         *incident_node = nullptr;
         for (auto e : non_tree_edges)
         {
-            bool head_is_tree_node = tree.find(e->head->owner) != tree.end();
-            bool tail_is_tree_node = tree.find(e->tail->owner) != tree.end();
+            bool head_is_tree_node = nodes.find(e->head->owner) != nodes.end();
+            bool tail_is_tree_node = nodes.find(e->tail->owner) != nodes.end();
             if ((head_is_tree_node && !tail_is_tree_node) || (!head_is_tree_node && tail_is_tree_node))
             {
                 if (e->slack() < slack)
@@ -680,6 +608,216 @@ namespace graph_layout
             }
         }
         return min_slack_edge;
+    }
+
+    void tree_t::tighten() const
+    {
+        for (;;)
+        {
+            tree_t tree = tight_sub_tree();
+            if (tree.nodes.size() == nodes.size())
+            {
+                return;
+            }
+            node_t* incident_node;
+            edge_t* e = tree.find_min_incident_edge(&incident_node);
+            auto delta = e->slack();
+            if (e->head->owner == incident_node)
+            {
+                delta = -delta;
+            }
+            for (auto n : tree.nodes)
+            {
+                n->rank = n->rank + delta;
+            }
+        }
+    }
+
+    tree_t tree_t::tight_sub_tree() const
+    {
+        tree_t tree;
+        int min_slack = std::numeric_limits<int>::max();
+        vector stack{*nodes.begin()};
+        while (!stack.empty())
+        {
+            auto n = stack.back();
+            tree.nodes.insert(n);
+            stack.pop_back();
+            auto connected_nodes = n->get_direct_connected_nodes([&min_slack, &tree, this](edge_t* e)
+            {
+                if (tree_edges.find(e) == tree_edges.end())
+                {
+                    return false;
+                }
+                if (e->slack() != 0)
+                {
+                    if (e->slack() < min_slack)
+                    {
+                        min_slack = e->slack();
+                    }
+                    return false;
+                }
+                tree.tree_edges.insert(e);
+                return true;
+            });
+            for (auto connected_node : connected_nodes)
+            {
+                if (tree.nodes.find(connected_node) == tree.nodes.end())
+                {
+                    stack.push_back(connected_node);
+                }
+            }
+        }
+        tree.update_non_tree_edges(tree_edges);
+        return tree;
+    }
+
+    edge_t* tree_t::leave_edge() const
+    {
+        for (auto edge : tree_edges)
+        {
+            if (edge->cut_value < 0)
+            {
+                return edge;
+            }
+        }
+        return nullptr;
+    }
+
+    edge_t* tree_t::enter_edge(edge_t* edge)
+    {
+        split_to_head_tail(edge);
+        int slack = std::numeric_limits<int>::max();
+        edge_t* min_slack_edge = nullptr;
+        for (auto e : non_tree_edges)
+        {
+            if (e->tail->owner->belongs_to_head && e->head->owner->belongs_to_tail)
+            {
+                if (e->slack() < slack)
+                {
+                    slack = e->slack();
+                    min_slack_edge = e;
+                }
+            }
+        }
+        assert(min_slack_edge!=nullptr);
+        return min_slack_edge;
+    }
+
+    void tree_t::exchange(edge_t* e, edge_t* f)
+    {
+        tree_edges.insert(f);
+        tree_edges.erase(e);
+        non_tree_edges.erase(f);
+        non_tree_edges.insert(e);
+        tighten();
+        calculate_cut_values();
+    }
+
+    void tree_t::calculate_cut_values()
+    {
+        set<node_t*> visited_nodes;
+        for (auto edge : tree_edges)
+        {
+            split_to_head_tail(edge);
+            int head_to_tail_weight = 0;
+            int tail_to_head_weight = 0;
+            for (auto edge2 : tree_edges)
+            {
+                if (edge2 == edge)
+                {
+                    continue;
+                }
+                add_to_weights(edge2, head_to_tail_weight, tail_to_head_weight);
+            }
+            for (auto edge2 : non_tree_edges)
+            {
+                if (edge2 == edge)
+                {
+                    continue;
+                }
+                add_to_weights(edge2, head_to_tail_weight, tail_to_head_weight);
+            }
+            edge->cut_value = edge->weight + tail_to_head_weight - head_to_tail_weight;
+        }
+    }
+
+    void tree_t::reset_head_or_tail() const
+    {
+        for (auto n : nodes)
+        {
+            n->belongs_to_head = false;
+            n->belongs_to_tail = false;
+        }
+    }
+
+    void tree_t::split_to_head_tail(edge_t* edge)
+    {
+        reset_head_or_tail();
+        mark_head_or_tail(edge->tail->owner, edge, false);
+        mark_head_or_tail(edge->head->owner, edge, true);
+    }
+
+    void tree_t::mark_head_or_tail(node_t* n, edge_t* cut_edge, bool is_head)
+    {
+        set<node_t*> visited_nodes;
+        vector<node_t*> stack;
+        stack.push_back(n);
+        while (!stack.empty())
+        {
+            auto node = stack.back();
+            stack.pop_back();
+            visited_nodes.insert(node);
+            if (is_head)
+            {
+                node->belongs_to_head = true;
+            }
+            else
+            {
+                node->belongs_to_tail = true;
+            }
+            auto direct_connected_nodes = node->get_direct_connected_nodes([this, cut_edge](edge_t* e)
+            {
+                if (tree_edges.find(e) == tree_edges.end() || e == cut_edge)
+                {
+                    return false;
+                }
+                return true;
+            });
+            for (auto direct_connected : direct_connected_nodes)
+            {
+                if (visited_nodes.find(direct_connected) == visited_nodes.end())
+                {
+                    stack.push_back(direct_connected);
+                }
+            }
+        }
+    }
+
+    void tree_t::add_to_weights(const edge_t* edge, int& head_to_tail_weight, int& tail_to_head_weight)
+    {
+        auto tail = edge->tail->owner;
+        auto head = edge->head->owner;
+        if (tail->belongs_to_tail && head->belongs_to_head)
+        {
+            tail_to_head_weight += edge->weight;
+        }
+        if (tail->belongs_to_head && head->belongs_to_tail)
+        {
+            head_to_tail_weight += edge->weight;
+        }
+    }
+
+    void tree_t::update_non_tree_edges(set<edge_t*> all_edges)
+    {
+        non_tree_edges.clear();
+        for (auto edge : all_edges)
+        {
+            if (tree_edges.find(edge) == tree_edges.end())
+            {
+                non_tree_edges.insert(edge);
+            }
+        }
     }
 
     vector<node_t*> graph_t::get_nodes_without_unscanned_in_edges(const set<node_t*>& visited, const set<edge_t*>& scanned_set) const
@@ -711,54 +849,71 @@ namespace graph_layout
     void graph_t::test()
     {
         graph_t g;
-        auto node_a = g.add_node("VertexNormalWs");
-        auto node_b = g.add_node("Camera Vector");
-        auto node_c = g.add_node("Dot");
-        auto node_d = g.add_node("Clamp");
-        auto node_e = g.add_node("Power");
-        auto node_f = g.add_node("Add");
-        auto node_g = g.add_node("Lerp");
-        auto node_h = g.add_node("Multiply");
-        auto node_i = g.add_node("Add_i");
-        auto node_j = g.add_node("GizmoColor");
-        auto node_k = g.add_node("Multiply_k");
-        auto node_l = g.add_node("GizmoMaterial");
+        auto node_K2Node_CallFunction_18 = g.add_node("K2Node_CallFunction_18");
+        auto pin_K2Node_CallFunction_18_in0 = node_K2Node_CallFunction_18->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_18_in1 = node_K2Node_CallFunction_18->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_18_in2 = node_K2Node_CallFunction_18->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_18_out3 = node_K2Node_CallFunction_18->add_pin(pin_type_t::out);
 
-        auto pin_a_out = node_a->add_pin(pin_type_t::out);
-        auto pin_b_out = node_b->add_pin(pin_type_t::out);
-        auto pin_c_in_1 = node_c->add_pin(pin_type_t::in);
-        auto pin_c_in_2 = node_c->add_pin(pin_type_t::in);
-        auto pin_c_out = node_c->add_pin(pin_type_t::out);
-        auto pin_d_in = node_d->add_pin(pin_type_t::in);
-        auto pin_d_out = node_d->add_pin(pin_type_t::out);
-        auto pin_e_in = node_e->add_pin(pin_type_t::in);
-        auto pin_e_out = node_e->add_pin(pin_type_t::out);
-        auto pin_f_in = node_f->add_pin(pin_type_t::in);
-        auto pin_g_in = node_g->add_pin(pin_type_t::in);
-        auto pin_g_out = node_g->add_pin(pin_type_t::out);
-        auto pin_h_in = node_h->add_pin(pin_type_t::in);
-        auto pin_h_out = node_h->add_pin(pin_type_t::out);
-        auto pin_i_in_1 = node_i->add_pin(pin_type_t::in);
-        auto pin_i_in_2 = node_i->add_pin(pin_type_t::in);
-        auto pin_i_out = node_i->add_pin(pin_type_t::out);
-        auto pin_j_out = node_j->add_pin(pin_type_t::out);
-        auto pin_k_in_1 = node_k->add_pin(pin_type_t::in);
-        auto pin_k_in_2 = node_k->add_pin(pin_type_t::in);
-        auto pin_k_out = node_k->add_pin(pin_type_t::out);
-        auto pin_l_in = node_l->add_pin(pin_type_t::in);
+        auto node_K2Node_CallFunction_14 = g.add_node("K2Node_CallFunction_14");
+        auto pin_K2Node_CallFunction_14_in0 = node_K2Node_CallFunction_14->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_14_in1 = node_K2Node_CallFunction_14->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_14_in2 = node_K2Node_CallFunction_14->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_14_out3 = node_K2Node_CallFunction_14->add_pin(pin_type_t::out);
 
-        g.add_edge(pin_a_out, pin_c_in_1);
-        g.add_edge(pin_b_out, pin_c_in_2);
-        g.add_edge(pin_c_out, pin_d_in);
-        g.add_edge(pin_d_out, pin_e_in);
-        g.add_edge(pin_d_out, pin_f_in);
-        g.add_edge(pin_d_out, pin_g_in);
-        g.add_edge(pin_e_out, pin_h_in);
-        g.add_edge(pin_g_out, pin_i_in_2);
-        g.add_edge(pin_h_out, pin_i_in_1);
-        g.add_edge(pin_i_out, pin_k_in_1);
-        g.add_edge(pin_j_out, pin_k_in_2);
-        g.add_edge(pin_k_out, pin_l_in);
+        auto node_K2Node_AddComponent_2 = g.add_node("K2Node_AddComponent_2");
+        auto pin_K2Node_AddComponent_2_in0 = node_K2Node_AddComponent_2->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_2_in1 = node_K2Node_AddComponent_2->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_2_in2 = node_K2Node_AddComponent_2->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_2_in3 = node_K2Node_AddComponent_2->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_2_in4 = node_K2Node_AddComponent_2->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_2_in5 = node_K2Node_AddComponent_2->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_2_in6 = node_K2Node_AddComponent_2->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_2_out7 = node_K2Node_AddComponent_2->add_pin(pin_type_t::out);
+        auto pin_K2Node_AddComponent_2_out8 = node_K2Node_AddComponent_2->add_pin(pin_type_t::out);
+
+        auto node_K2Node_SwitchEnum_0 = g.add_node("K2Node_SwitchEnum_0");
+        auto pin_K2Node_SwitchEnum_0_in0 = node_K2Node_SwitchEnum_0->add_pin(pin_type_t::in);
+        auto pin_K2Node_SwitchEnum_0_in1 = node_K2Node_SwitchEnum_0->add_pin(pin_type_t::in);
+        auto pin_K2Node_SwitchEnum_0_in2 = node_K2Node_SwitchEnum_0->add_pin(pin_type_t::in);
+        auto pin_K2Node_SwitchEnum_0_out3 = node_K2Node_SwitchEnum_0->add_pin(pin_type_t::out);
+        auto pin_K2Node_SwitchEnum_0_out4 = node_K2Node_SwitchEnum_0->add_pin(pin_type_t::out);
+        auto pin_K2Node_SwitchEnum_0_out5 = node_K2Node_SwitchEnum_0->add_pin(pin_type_t::out);
+
+        auto node_K2Node_CallFunction_16 = g.add_node("K2Node_CallFunction_16");
+        auto pin_K2Node_CallFunction_16_in0 = node_K2Node_CallFunction_16->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_16_in1 = node_K2Node_CallFunction_16->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_16_in2 = node_K2Node_CallFunction_16->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_16_in3 = node_K2Node_CallFunction_16->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_16_out4 = node_K2Node_CallFunction_16->add_pin(pin_type_t::out);
+        auto pin_K2Node_CallFunction_16_out5 = node_K2Node_CallFunction_16->add_pin(pin_type_t::out);
+
+        auto node_K2Node_CallFunction_13 = g.add_node("K2Node_CallFunction_13");
+        auto pin_K2Node_CallFunction_13_in0 = node_K2Node_CallFunction_13->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_13_in1 = node_K2Node_CallFunction_13->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_13_in2 = node_K2Node_CallFunction_13->add_pin(pin_type_t::in);
+        auto pin_K2Node_CallFunction_13_out3 = node_K2Node_CallFunction_13->add_pin(pin_type_t::out);
+
+        auto node_K2Node_AddComponent_4 = g.add_node("K2Node_AddComponent_4");
+        auto pin_K2Node_AddComponent_4_in0 = node_K2Node_AddComponent_4->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_4_in1 = node_K2Node_AddComponent_4->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_4_in2 = node_K2Node_AddComponent_4->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_4_in3 = node_K2Node_AddComponent_4->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_4_in4 = node_K2Node_AddComponent_4->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_4_in5 = node_K2Node_AddComponent_4->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_4_in6 = node_K2Node_AddComponent_4->add_pin(pin_type_t::in);
+        auto pin_K2Node_AddComponent_4_out7 = node_K2Node_AddComponent_4->add_pin(pin_type_t::out);
+        auto pin_K2Node_AddComponent_4_out8 = node_K2Node_AddComponent_4->add_pin(pin_type_t::out);
+
+        g.add_edge(pin_K2Node_SwitchEnum_0_out4, pin_K2Node_AddComponent_2_in0);
+        g.add_edge(pin_K2Node_AddComponent_2_out8, pin_K2Node_CallFunction_18_in1);
+        g.add_edge(pin_K2Node_AddComponent_2_out8, pin_K2Node_CallFunction_14_in1);
+        g.add_edge(pin_K2Node_AddComponent_4_out8, pin_K2Node_CallFunction_16_in1);
+        g.add_edge(pin_K2Node_AddComponent_4_out8, pin_K2Node_CallFunction_13_in1);
+        g.add_edge(pin_K2Node_CallFunction_16_out5, pin_K2Node_CallFunction_18_in2);
+        g.add_edge(pin_K2Node_CallFunction_13_out3, pin_K2Node_CallFunction_16_in0);
+        g.add_edge(pin_K2Node_CallFunction_14_out3, pin_K2Node_CallFunction_18_in0);
+        g.add_edge(pin_K2Node_SwitchEnum_0_out3, pin_K2Node_AddComponent_4_in0);
 
         g.acyclic();
         set<edge_t*> non_tree_edges;
