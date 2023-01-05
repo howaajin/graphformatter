@@ -88,7 +88,7 @@ namespace graph_layout
         bool is_descendant_of(node_t* node) const;
         void set_position(vector2_t p);
         pin_t* add_pin(pin_type_t type);
-        std::vector<node_t*> get_direct_connected_nodes(std::function<bool(edge_t*)> filter) const;
+        std::set<node_t*> get_direct_connected_nodes(std::function<bool(edge_t*)> filter) const;
         ~node_t();
         node_t* clone() const;
     };
@@ -105,7 +105,7 @@ namespace graph_layout
         edge_t* enter_edge(edge_t* edge);
         void exchange(edge_t* e, edge_t* f);
         void calculate_cut_values();
-        void update_non_tree_edges(std::set<edge_t*> all_edges);
+        void update_non_tree_edges(const std::set<edge_t*>& all_edges);
     private:
         void reset_head_or_tail() const;
         void split_to_head_tail(edge_t* edge);
@@ -113,30 +113,33 @@ namespace graph_layout
         static void add_to_weights(const edge_t* edge, int& head_to_tail_weight, int& tail_to_head_weight);
     };
 
+    enum class rank_slot_t { none, min, max, };
+
     struct graph_t
     {
         rect_t bound{0, 0, 0, 0};
         std::vector<node_t*> nodes;
-        std::set<node_t*> min_ranking_set;
-        std::set<node_t*> max_ranking_set;
-        node_t* min_ranking_dummy_node = nullptr;
-        node_t* max_ranking_dummy_node = nullptr;
+        node_t* min_ranking_node = nullptr;
+        node_t* max_ranking_node = nullptr;
         std::map<std::pair<pin_t*, pin_t*>, edge_t*> edges;
         std::vector<std::vector<node_t*>> layers;
         std::map<node_t*, graph_t*> sub_graphs;
 
         graph_t* clone() const;
-        graph_t* clone(std::unordered_map<node_t*, node_t*>& nodes_map, std::unordered_map<pin_t*, pin_t*>& pins_map, std::unordered_map<edge_t*, edge_t*>& edges_map) const;
+        graph_t* clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
+                       std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const;
         ~graph_t();
 
         node_t* add_node(graph_t* sub_graph = nullptr);
         node_t* add_node(const std::string& name, graph_t* sub_graph = nullptr);
+        void set_node_in_rank_slot(node_t* node, rank_slot_t rank_slot);
         void remove_node(node_t* node);
 
         edge_t* add_edge(pin_t* tail, pin_t* head);
         void remove_edge(const edge_t* edge);
         void remove_edge(pin_t* tail, pin_t* head);
         void invert_edge(edge_t* edge) const;
+        void merge_edges();
 
         std::vector<pin_t*> get_pins() const;
         std::vector<node_t*> get_source_nodes() const;
@@ -144,7 +147,7 @@ namespace graph_layout
 
         void translate(vector2_t offset);
         void set_position(vector2_t position);
-        void acyclic();
+        void acyclic() const;
         void rank();
         tree_t feasible_tree();
         std::string generate_test_code();

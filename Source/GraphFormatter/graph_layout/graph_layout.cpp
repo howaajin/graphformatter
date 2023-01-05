@@ -105,21 +105,21 @@ namespace graph_layout
         return pin;
     }
 
-    vector<node_t*> node_t::get_direct_connected_nodes(function<bool(edge_t*)> filter) const
+    set<node_t*> node_t::get_direct_connected_nodes(function<bool(edge_t*)> filter) const
     {
-        vector<node_t*> result;
+        set<node_t*> result;
         for (auto e : in_edges)
         {
             if (filter(e))
             {
-                result.push_back(e->tail->owner);
+                result.insert(e->tail->owner);
             }
         }
         for (auto e : out_edges)
         {
             if (filter(e))
             {
-                result.push_back(e->head->owner);
+                result.insert(e->head->owner);
             }
         }
         return result;
@@ -156,25 +156,29 @@ namespace graph_layout
 
     graph_t* graph_t::clone() const
     {
-        unordered_map<node_t*, node_t*> nodes_map;
-        unordered_map<pin_t*, pin_t*> pins_map;
-        unordered_map<edge_t*, edge_t*> edges_map;
-        return clone(nodes_map, pins_map, edges_map);
+        map<node_t*, node_t*> nodes_map;
+        map<pin_t*, pin_t*> pins_map;
+        map<edge_t*, edge_t*> edges_map;
+        map<node_t*, node_t*> nodes_map_inv;
+        map<pin_t*, pin_t*> pins_map_inv;
+        map<edge_t*, edge_t*> edges_map_inv;
+        return clone(nodes_map, pins_map, edges_map, nodes_map_inv, pins_map_inv, edges_map_inv);
     }
 
-    graph_t* graph_t::clone(unordered_map<node_t*, node_t*>& nodes_map, unordered_map<pin_t*, pin_t*>& pins_map, unordered_map<edge_t*, edge_t*>& edges_map) const
+    graph_t* graph_t::clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
+                            std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const
     {
         auto cloned = new graph_t;
         cloned->bound = bound;
-        unordered_map<pin_t*, pin_t*> pins_map_inv;
         for (auto n : nodes)
         {
             auto cloned_node = n->clone();
-            nodes_map.insert(make_pair(cloned_node, n));
+            nodes_map[cloned_node] = n;
+            nodes_map_inv[n] = cloned_node;
             for (size_t i = 0; i < n->pins.size(); i++)
             {
-                pins_map_inv.insert(make_pair(n->pins[i], cloned_node->pins[i]));
-                pins_map.insert(make_pair(cloned_node->pins[i], n->pins[i]));
+                pins_map_inv[n->pins[i]] = cloned_node->pins[i];
+                pins_map[cloned_node->pins[i]] = n->pins[i];
             }
             cloned->nodes.push_back(cloned_node);
             if (cloned_node->graph)
@@ -187,7 +191,8 @@ namespace graph_layout
             auto tail_pin = pins_map_inv[e.second->tail];
             auto head_pin = pins_map_inv[e.second->head];
             auto edge = cloned->add_edge(tail_pin, head_pin);
-            edges_map.insert(make_pair(edge, e.second));
+            edges_map[edge] = e.second;
+            edges_map_inv[e.second] = edge;
         }
         return cloned;
     }
@@ -221,6 +226,45 @@ namespace graph_layout
         auto node = add_node(sub_graph);
         node->name = name;
         return node;
+    }
+
+    void graph_t::set_node_in_rank_slot(node_t* node, rank_slot_t rank_slot)
+    {
+        switch (rank_slot)
+        {
+        case rank_slot_t::min:
+            {
+                min_ranking_node = node;
+                pin_t* dummy_pin_out = min_ranking_node->add_pin(pin_type_t::out);
+                auto source_nodes = get_source_nodes();
+                for (auto n : source_nodes)
+                {
+                    if (n == node)
+                    {
+                        continue;
+                    }
+                    pin_t* dummy_pin_in = n->add_pin(pin_type_t::in);
+                    edge_t* dummy_edge = add_edge(dummy_pin_out, dummy_pin_in);
+                }
+            }
+            break;
+        case rank_slot_t::max:
+            {
+                max_ranking_node = node;
+                pin_t* dummy_pin_in = max_ranking_node->add_pin(pin_type_t::in);
+                auto sink_nodes = get_sink_nodes();
+                for (auto n : sink_nodes)
+                {
+                    if (n == node)
+                    {
+                        continue;
+                    }
+                    pin_t* dummy_pin_out = n->add_pin(pin_type_t::out);
+                    edge_t* dummy_edge = add_edge(dummy_pin_out, dummy_pin_in);
+                }
+            }
+            break;
+        }
     }
 
     void graph_t::remove_node(node_t* node)
@@ -270,29 +314,50 @@ namespace graph_layout
 
     void graph_t::invert_edge(edge_t* edge) const
     {
-        if (edge->tail->type == pin_type_t::in)
-        {
-            auto& out_edges = edge->head->owner->out_edges;
-            auto& in_edges = edge->tail->owner->in_edges;
-            in_edges.erase(find(in_edges.begin(), in_edges.end(), edge));
-            edge->tail->type = pin_type_t::out;
-            edge->tail->owner->out_edges.push_back(edge);
-            out_edges.erase(find(out_edges.begin(), out_edges.end(), edge));
-            edge->head->type = pin_type_t::in;
-            edge->head->owner->in_edges.push_back(edge);
-        }
-        else
-        {
-            auto& out_edges = edge->tail->owner->out_edges;
-            auto& in_edges = edge->head->owner->in_edges;
-            out_edges.erase(find(out_edges.begin(), out_edges.end(), edge));
-            edge->tail->type = pin_type_t::in;
-            edge->tail->owner->in_edges.push_back(edge);
-            in_edges.erase(find(in_edges.begin(), in_edges.end(), edge));
-            edge->head->type = pin_type_t::out;
-            edge->head->owner->out_edges.push_back(edge);
-        }
+        pin_t* tail = edge->tail;
+        pin_t* head = edge->head;
+        node_t* tail_node = tail->owner;
+        node_t* head_node = head->owner;
+        auto& out_edges = tail_node->out_edges;
+        auto& in_edges = head_node->in_edges;
+        out_edges.erase(find(out_edges.begin(), out_edges.end(), edge));
+        in_edges.erase(find(in_edges.begin(), in_edges.end(), edge));
+        tail->type = pin_type_t::in;
+        head->type = pin_type_t::out;
+        tail_node->in_edges.push_back(edge);
+        head_node->out_edges.push_back(edge);
+        swap(edge->tail, edge->head);
         edge->is_inverted = true;
+    }
+
+    void graph_t::merge_edges()
+    {
+        map<pair<node_t*, node_t*>, vector<edge_t*>> tail_to_head_edges_map;
+        for (auto [fst, edge] : edges)
+        {
+            pair p = make_pair(edge->tail->owner, edge->head->owner);
+            auto it = tail_to_head_edges_map.find(p);
+            if (it != tail_to_head_edges_map.end())
+            {
+                it->second.push_back(edge);
+            }
+            else
+            {
+                tail_to_head_edges_map.insert(make_pair(p, vector{edge}));
+            }
+        }
+        for (auto [k, v] : tail_to_head_edges_map)
+        {
+            if (v.size() > 1)
+            {
+                edge_t* first_edge = v[0];
+                for (size_t i = 1; i < v.size(); i++)
+                {
+                    first_edge->weight += v[i]->weight;
+                    remove_edge(v[i]);
+                }
+            }
+        }
     }
 
     vector<pin_t*> graph_t::get_pins() const
@@ -346,7 +411,7 @@ namespace graph_layout
         translate(vector2_t{position.x - bound.l, position.y - bound.t});
     }
 
-    void graph_t::acyclic()
+    void graph_t::acyclic() const
     {
         if (nodes.empty())
         {
@@ -354,10 +419,13 @@ namespace graph_layout
         }
         set<node_t*> visited_set;
         vector<edge_t*> non_tree_edges;
-        unordered_map<node_t*, node_t*> nodes_map;
-        unordered_map<pin_t*, pin_t*> pins_map;
-        unordered_map<edge_t*, edge_t*> edges_map;
-        graph_t* tree = clone(nodes_map, pins_map, edges_map);
+        map<node_t*, node_t*> nodes_map;
+        map<pin_t*, pin_t*> pins_map;
+        map<edge_t*, edge_t*> edges_map;
+        map<node_t*, node_t*> nodes_map_inv;
+        map<pin_t*, pin_t*> pins_map_inv;
+        map<edge_t*, edge_t*> edges_map_inv;
+        graph_t* tree = clone(nodes_map, pins_map, edges_map, nodes_map_inv, pins_map_inv, edges_map_inv);
         vector<node_t*> source_nodes = tree->get_source_nodes();
         if (!source_nodes.empty())
         {
@@ -410,9 +478,10 @@ namespace graph_layout
             if (p.first->is_descendant_of(p.second))
             {
                 invert_edge(original_non_tree_edges[i]);
-                printf("invert edge: %s->%s\n", original_non_tree_edges[i]->tail->owner->name.c_str(), original_non_tree_edges[i]->head->owner->name.c_str());
+                printf("invert edge: %s->%s\n", original_non_tree_edges[i]->head->owner->name.c_str(), original_non_tree_edges[i]->tail->owner->name.c_str());
             }
         }
+        delete tree;
     }
 
     void graph_t::rank()
@@ -538,15 +607,15 @@ namespace graph_layout
         tree_t tree;
         vector<node_t*> stack;
         int min_slack = std::numeric_limits<int>::max();
-        if (min_ranking_dummy_node)
+        if (min_ranking_node)
         {
-            stack.push_back(min_ranking_dummy_node);
+            stack.push_back(min_ranking_node);
         }
         else
         {
-            if (max_ranking_dummy_node)
+            if (max_ranking_node)
             {
-                stack.push_back(max_ranking_dummy_node);
+                stack.push_back(max_ranking_node);
             }
             else
             {
@@ -808,7 +877,7 @@ namespace graph_layout
         }
     }
 
-    void tree_t::update_non_tree_edges(set<edge_t*> all_edges)
+    void tree_t::update_non_tree_edges(const set<edge_t*>& all_edges)
     {
         non_tree_edges.clear();
         for (auto edge : all_edges)
@@ -907,16 +976,29 @@ namespace graph_layout
 
         g.add_edge(pin_K2Node_SwitchEnum_0_out4, pin_K2Node_AddComponent_2_in0);
         g.add_edge(pin_K2Node_AddComponent_2_out8, pin_K2Node_CallFunction_18_in1);
+        g.add_edge(pin_K2Node_AddComponent_2_out7, pin_K2Node_CallFunction_18_in2);
         g.add_edge(pin_K2Node_AddComponent_2_out8, pin_K2Node_CallFunction_14_in1);
         g.add_edge(pin_K2Node_AddComponent_4_out8, pin_K2Node_CallFunction_16_in1);
         g.add_edge(pin_K2Node_AddComponent_4_out8, pin_K2Node_CallFunction_13_in1);
         g.add_edge(pin_K2Node_CallFunction_16_out5, pin_K2Node_CallFunction_18_in2);
         g.add_edge(pin_K2Node_CallFunction_13_out3, pin_K2Node_CallFunction_16_in0);
         g.add_edge(pin_K2Node_CallFunction_14_out3, pin_K2Node_CallFunction_18_in0);
-        g.add_edge(pin_K2Node_SwitchEnum_0_out3, pin_K2Node_AddComponent_4_in0);
 
-        g.acyclic();
-        set<edge_t*> non_tree_edges;
-        g.rank();
+        map<node_t*, node_t*> nodes_map;
+        map<pin_t*, pin_t*> pins_map;
+        map<edge_t*, edge_t*> edges_map;
+        map<node_t*, node_t*> nodes_map_inv;
+        map<pin_t*, pin_t*> pins_map_inv;
+        map<edge_t*, edge_t*> edges_map_inv;
+        graph_t* cloned = g.clone(nodes_map, pins_map, edges_map, nodes_map_inv, pins_map_inv, edges_map_inv);
+        cloned->set_node_in_rank_slot(nodes_map_inv[node_K2Node_AddComponent_4], rank_slot_t::min);
+        cloned->merge_edges();
+        cloned->acyclic();
+        cloned->rank();
+        for (auto n : cloned->nodes)
+        {
+            nodes_map[n]->rank = n->rank;
+        }
+        delete cloned;
     }
 }
