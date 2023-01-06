@@ -929,11 +929,20 @@ FFormatterNode* FFormatterGraph::FindSinkNode() const
 
 FFormatterNode* FFormatterGraph::FindMaxDegreeDiffNode() const
 {
+    auto EdgesWeightSum = [](TArray<FFormatterEdge*> Edges)
+    {
+        float Sum = 0;
+        for (auto Edge : Edges)
+        {
+            Sum += Edge->Weight;
+        }
+        return Sum;
+    };
     FFormatterNode* Result = nullptr;
     int32 MaxDegreeDiff = -INT32_MAX;
     for (auto Node : Nodes)
     {
-        const int32 DegreeDiff = Node->OutEdges.Num() - Node->InEdges.Num();
+        const int32 DegreeDiff = EdgesWeightSum(Node->OutEdges) - EdgesWeightSum(Node->InEdges);
         if (DegreeDiff > MaxDegreeDiff)
         {
             MaxDegreeDiff = DegreeDiff;
