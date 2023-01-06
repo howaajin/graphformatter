@@ -58,6 +58,7 @@ namespace graph_layout
         pin_type_t type = pin_type_t::in;
         vector2_t offset{0, 0};
         node_t* owner = nullptr;
+        int index_in_layer = -1;
     };
 
     struct edge_t
@@ -70,12 +71,14 @@ namespace graph_layout
         bool is_inverted = false;
         int length() const;
         int slack() const;
+        bool is_crossing(edge_t* other);
     };
 
     struct node_t
     {
         std::string name;
         int rank{-1};
+        float layer_order = -1.0f;
         // Is the node belongs to the head component?
         bool belongs_to_head = false;
         // Is the node belongs to the tail component?
@@ -84,11 +87,16 @@ namespace graph_layout
         vector2_t position{0, 0};
         std::vector<edge_t*> in_edges;
         std::vector<edge_t*> out_edges;
-        std::vector<pin_t*> pins;
+        std::vector<pin_t*> in_pins;
+        std::vector<pin_t*> out_pins;
         bool is_descendant_of(node_t* node) const;
         void set_position(vector2_t p);
         pin_t* add_pin(pin_type_t type);
+        std::vector<edge_t*> get_edges_linked_to_layer(std::vector<node_t*> layer, bool is_in);
+        float get_barycenter_in_layer(std::vector<node_t*> layer, bool is_in);
         std::set<node_t*> get_direct_connected_nodes(std::function<bool(edge_t*)> filter) const;
+        std::set<node_t*> get_out_nodes() const;
+        std::set<node_t*> get_in_nodes() const;
         ~node_t();
         node_t* clone() const;
     };
@@ -106,6 +114,7 @@ namespace graph_layout
         void exchange(edge_t* e, edge_t* f);
         void calculate_cut_values();
         void update_non_tree_edges(const std::set<edge_t*>& all_edges);
+
     private:
         void reset_head_or_tail() const;
         void split_to_head_tail(edge_t* edge);
@@ -118,6 +127,7 @@ namespace graph_layout
     struct graph_t
     {
         rect_t bound{0, 0, 0, 0};
+        size_t max_iterations = 24;
         std::vector<node_t*> nodes;
         node_t* min_ranking_node = nullptr;
         node_t* max_ranking_node = nullptr;
@@ -149,9 +159,17 @@ namespace graph_layout
         void set_position(vector2_t position);
         void acyclic() const;
         void rank();
+        void add_dummy_nodes(tree_t& feasible_tree);
+        void assign_layers();
+        std::vector<std::vector<node_t*>> ordering();
+        void sort_layers(std::vector<std::vector<node_t*>> layer_vec, bool is_down);
+        void calculate_pins_index_in_layer(std::vector<node_t*>& layer) const;
+        std::vector<edge_t*> get_edges_between_two_layers(std::vector<node_t*> lower, std::vector<node_t*> upper) const;
+        size_t crossing(std::vector<std::vector<node_t*>>& order, bool calculate_pins_index) const;
         tree_t feasible_tree();
         std::string generate_test_code();
         static void test();
+
     private:
         void init_rank();
         void normalize();

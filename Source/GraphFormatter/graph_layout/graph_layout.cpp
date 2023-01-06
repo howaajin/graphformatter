@@ -12,6 +12,7 @@
 #include <sstream>
 #include <iostream>
 #include <fstream>
+#include <queue>
 
 namespace graph_layout
 {
@@ -63,6 +64,12 @@ namespace graph_layout
         return length() - min_length;
     }
 
+    bool edge_t::is_crossing(edge_t* other)
+    {
+        return (tail->index_in_layer < other->tail->index_in_layer && head->index_in_layer > other->head->index_in_layer) ||
+            (tail->index_in_layer > other->tail->index_in_layer && head->index_in_layer < other->head->index_in_layer);
+    }
+
     bool node_t::is_descendant_of(node_t* node) const
     {
         set<node_t*> visited_set;
@@ -101,8 +108,41 @@ namespace graph_layout
     {
         auto pin = new pin_t{type};
         pin->owner = this;
-        pins.push_back(pin);
+        (type == pin_type_t::in ? in_pins : out_pins).push_back(pin);
         return pin;
+    }
+
+    std::vector<edge_t*> node_t::get_edges_linked_to_layer(std::vector<node_t*> layer, bool is_in)
+    {
+        vector<edge_t*> result;
+        auto edges = is_in ? in_edges : out_edges;
+        for (auto e : edges)
+        {
+            for (auto layer_node : layer)
+            {
+                auto n = is_in ? e->head->owner : e->tail->owner;
+                if (n == layer_node)
+                {
+                    result.push_back(e);
+                }
+            }
+        }
+        return result;
+    }
+
+    float node_t::get_barycenter_in_layer(std::vector<node_t*> layer, bool is_in)
+    {
+        auto edges = get_edges_linked_to_layer(layer, is_in);
+        if (edges.empty())
+        {
+            return -1.0f;
+        }
+        float sum = 0.0f;
+        for (auto e : edges)
+        {
+            sum += static_cast<float>(is_in ? e->tail->index_in_layer : e->head->index_in_layer);
+        }
+        return sum / static_cast<float>(edges.size());
     }
 
     set<node_t*> node_t::get_direct_connected_nodes(function<bool(edge_t*)> filter) const
@@ -125,9 +165,33 @@ namespace graph_layout
         return result;
     }
 
+    std::set<node_t*> node_t::get_out_nodes() const
+    {
+        set<node_t*> out_nodes;
+        for (auto e : out_edges)
+        {
+            out_nodes.insert(e->head->owner);
+        }
+        return out_nodes;
+    }
+
+    std::set<node_t*> node_t::get_in_nodes() const
+    {
+        set<node_t*> in_nodes;
+        for (auto e : in_edges)
+        {
+            in_nodes.insert(e->head->owner);
+        }
+        return in_nodes;
+    }
+
     node_t::~node_t()
     {
-        for (auto pin : pins)
+        for (auto pin : in_pins)
+        {
+            delete pin;
+        }
+        for (auto pin : out_pins)
         {
             delete pin;
         }
@@ -143,13 +207,21 @@ namespace graph_layout
             new_node->graph = graph->clone();
         }
         new_node->position = position;
-        for (auto pin : pins)
+        for (auto pin : in_pins)
         {
             auto new_pin = new pin_t();
             new_pin->type = pin->type;
             new_pin->offset = pin->offset;
             new_pin->owner = new_node;
-            new_node->pins.push_back(new_pin);
+            new_node->in_pins.push_back(new_pin);
+        }
+        for (auto pin : out_pins)
+        {
+            auto new_pin = new pin_t();
+            new_pin->type = pin->type;
+            new_pin->offset = pin->offset;
+            new_pin->owner = new_node;
+            new_node->out_pins.push_back(new_pin);
         }
         return new_node;
     }
@@ -175,10 +247,15 @@ namespace graph_layout
             auto cloned_node = n->clone();
             nodes_map[cloned_node] = n;
             nodes_map_inv[n] = cloned_node;
-            for (size_t i = 0; i < n->pins.size(); i++)
+            for (size_t i = 0; i < n->in_pins.size(); i++)
             {
-                pins_map_inv[n->pins[i]] = cloned_node->pins[i];
-                pins_map[cloned_node->pins[i]] = n->pins[i];
+                pins_map_inv[n->in_pins[i]] = cloned_node->in_pins[i];
+                pins_map[cloned_node->in_pins[i]] = n->in_pins[i];
+            }
+            for (size_t i = 0; i < n->out_pins.size(); i++)
+            {
+                pins_map_inv[n->out_pins[i]] = cloned_node->out_pins[i];
+                pins_map[cloned_node->out_pins[i]] = n->out_pins[i];
             }
             cloned->nodes.push_back(cloned_node);
             if (cloned_node->graph)
@@ -245,6 +322,7 @@ namespace graph_layout
                     }
                     pin_t* dummy_pin_in = n->add_pin(pin_type_t::in);
                     edge_t* dummy_edge = add_edge(dummy_pin_out, dummy_pin_in);
+                    //dummy_edge->min_length = 0;
                 }
             }
             break;
@@ -261,6 +339,7 @@ namespace graph_layout
                     }
                     pin_t* dummy_pin_out = n->add_pin(pin_type_t::out);
                     edge_t* dummy_edge = add_edge(dummy_pin_out, dummy_pin_in);
+                    //dummy_edge->min_length = 0;
                 }
             }
             break;
@@ -365,8 +444,9 @@ namespace graph_layout
         vector<pin_t*> pins;
         for (auto n : nodes)
         {
-            pins.reserve(pins.size() + n->pins.size());
-            pins.insert(pins.end(), n->pins.begin(), n->pins.end());
+            pins.reserve(pins.size() + n->in_pins.size() + n->out_pins.size());
+            pins.insert(pins.end(), n->in_pins.begin(), n->in_pins.end());
+            pins.insert(pins.end(), n->out_pins.begin(), n->out_pins.end());
         }
         return pins;
     }
@@ -496,6 +576,199 @@ namespace graph_layout
         normalize();
     }
 
+    void graph_t::add_dummy_nodes(tree_t& feasible_tree)
+    {
+        vector<edge_t*> edges_vec;
+        transform(edges.begin(), edges.end(), back_inserter(edges_vec), [](auto& p) { return p.second; });
+        for (auto edge : edges_vec)
+        {
+            int edge_len = edge->length();
+            if (edge_len > 1)
+            {
+                bool is_tree_edge = feasible_tree.tree_edges.find(edge) != feasible_tree.tree_edges.end();
+                pin_t* tail = edge->tail;
+                for (int i = 0; i < edge_len - 1; i++)
+                {
+                    node_t* dummy = add_node("dummy");
+                    if (is_tree_edge) feasible_tree.nodes.insert(dummy);
+                    dummy->rank = edge->tail->owner->rank + i + 1;
+                    pin_t* dummy_in = dummy->add_pin(pin_type_t::in);
+                    pin_t* dummy_out = dummy->add_pin(pin_type_t::out);
+                    edge_t* dummy_edge = add_edge(tail, dummy_in);
+                    if (is_tree_edge) feasible_tree.tree_edges.insert(dummy_edge);
+                    tail = dummy_out;
+                }
+                edge_t* dummy_edge = add_edge(tail, edge->head);
+                if (is_tree_edge)
+                {
+                    feasible_tree.tree_edges.insert(dummy_edge);
+                    feasible_tree.tree_edges.erase(edge);
+                }
+                remove_edge(edge);
+            }
+        }
+    }
+
+    void graph_t::assign_layers()
+    {
+        map<int, vector<node_t*>> rank_layer_map;
+        queue<node_t*> queue;
+        set<node_t*> visited;
+        for (auto n : nodes)
+        {
+            if (n->rank == 0)
+            {
+                queue.push(n);
+                visited.insert(n);
+            }
+        }
+        while (!queue.empty())
+        {
+            node_t* node = queue.front();
+            queue.pop();
+            auto it = rank_layer_map.find(node->rank);
+            if (it != rank_layer_map.end())
+            {
+                it->second.push_back(node);
+            }
+            else
+            {
+                rank_layer_map.insert(make_pair(node->rank, vector{node}));
+            }
+            auto out_nodes = node->get_out_nodes();
+            for (auto n : out_nodes)
+            {
+                if (visited.find(n) == visited.end())
+                {
+                    visited.insert(n);
+                    queue.push(n);
+                }
+            }
+        }
+        layers.resize(rank_layer_map.size());
+        for (auto [rank, layer] : rank_layer_map)
+        {
+            layers[rank] = std::move(layer);
+        }
+    }
+
+    std::vector<std::vector<node_t*>> graph_t::ordering()
+    {
+        auto order = layers;
+        auto best = layers;
+        size_t best_crossing = crossing(best, true);
+        for (size_t i = 0; i < max_iterations; i++)
+        {
+            sort_layers(order, i % 2 == 0);
+            const size_t new_crossing = crossing(order, false);
+            if (new_crossing < best_crossing)
+            {
+                best = order;
+                best_crossing = new_crossing;
+            }
+        }
+        return best;
+    }
+
+    void graph_t::sort_layers(std::vector<std::vector<node_t*>> layer_vec, bool is_down)
+    {
+        int max_rank = static_cast<int>(layer_vec.size());
+        if (max_rank < 2)
+        {
+            return;
+        }
+        const int start = is_down ? 1 : max_rank - 2;
+        const int end = is_down ? max_rank : -1;
+        const int step = is_down ? 1 : -1;
+        int i = start;
+        auto& first_layer = layer_vec[i - step];
+        calculate_pins_index_in_layer(first_layer);
+        while (i != end)
+        {
+            auto& fixed_layer = layer_vec[i - step];
+            auto& free_layer = layer_vec[i];
+            for (auto n : free_layer)
+            {
+                n->layer_order = n->get_barycenter_in_layer(fixed_layer, is_down);
+            }
+            stable_sort(free_layer.begin(), free_layer.end(), [](node_t* a, node_t* b)
+            {
+                if (a->layer_order == -1.0f || b->layer_order == -1.0f) return false;
+                return a->layer_order < b->layer_order;
+            });
+            calculate_pins_index_in_layer(free_layer);
+            i += step;
+        }
+    }
+
+    void graph_t::calculate_pins_index_in_layer(std::vector<node_t*>& layer) const
+    {
+        if (layer.empty())
+        {
+            return;
+        }
+        int in_pin_start_index = 0;
+        int out_pin_start_index = 0;
+        int end = static_cast<int>(layer.size());
+        for (int i = 0; i != end; i++)
+        {
+            for (int j = 0; j < layer[i]->in_pins.size(); i++)
+            {
+                auto pin = layer[i]->in_pins[j];
+                pin->index_in_layer = in_pin_start_index + j;
+            }
+            for (int j = 0; j < layer[i]->out_pins.size(); j++)
+            {
+                auto pin = layer[i]->out_pins[j];
+                pin->index_in_layer = out_pin_start_index + j;
+            }
+            out_pin_start_index += layer[i]->out_pins.size();
+            in_pin_start_index += layer[i]->in_pins.size();
+        }
+    }
+
+    std::vector<edge_t*> graph_t::get_edges_between_two_layers(std::vector<node_t*> lower, std::vector<node_t*> upper) const
+    {
+        vector<edge_t*> result;
+        for (auto n : lower)
+        {
+            auto layer_edges = n->get_edges_linked_to_layer(upper, false);
+            result.insert(result.end(), layer_edges.begin(), layer_edges.end());
+        }
+        return result;
+    }
+
+    size_t graph_t::crossing(std::vector<std::vector<node_t*>>& order, bool calculate_pins_index) const
+    {
+        size_t crossing_value = 0;
+        if (calculate_pins_index)
+        {
+            for (auto& layer : order)
+            {
+                calculate_pins_index_in_layer(layer);
+            }
+        }
+        for (int i = 1; i < order.size(); i++)
+        {
+            auto& upper_layer = order[i - 1];
+            auto& lower_layer = order[i];
+            auto cross_edges = get_edges_between_two_layers(lower_layer, upper_layer);
+            while (!cross_edges.empty())
+            {
+                auto edge1 = cross_edges.back();
+                cross_edges.pop_back();
+                for (auto edge2 : cross_edges)
+                {
+                    if (edge1->is_crossing(edge2))
+                    {
+                        crossing_value++;
+                    }
+                }
+            }
+        }
+        return crossing_value;
+    }
+
     tree_t graph_t::feasible_tree()
     {
         init_rank();
@@ -530,7 +803,13 @@ namespace graph_layout
             replace(node_name.begin(), node_name.end(), ' ', '_');
             ss << "auto node_" << node_name << " = g.add_node(\"" << node_name << "\");" << std::endl;
             int pin_index = 0;
-            for (auto p : n->pins)
+            for (auto p : n->in_pins)
+            {
+                string in_or_out = p->type == pin_type_t::in ? "in" : "out";
+                ss << "auto pin_" << node_name << "_" << in_or_out << pin_index << " = node_" << node_name << "->add_pin(pin_type_t::" << in_or_out << ");" << endl;
+                pin_index ++;
+            }
+            for (auto p : n->out_pins)
             {
                 string in_or_out = p->type == pin_type_t::in ? "in" : "out";
                 ss << "auto pin_" << node_name << "_" << in_or_out << pin_index << " = node_" << node_name << "->add_pin(pin_type_t::" << in_or_out << ");" << endl;
@@ -538,11 +817,19 @@ namespace graph_layout
             }
             ss << endl;
         }
-        auto find_pin_index = [](node_t* n, pin_t* p)
+        auto find_in_pin_index = [](node_t* n, pin_t* p)
         {
-            for (int i = 0; i < n->pins.size(); i++)
+            for (int i = 0; i < n->in_pins.size(); i++)
             {
-                if (n->pins[i] == p) return i;
+                if (n->in_pins[i] == p) return i;
+            }
+            return -1;
+        };
+        auto find_out_pin_index = [](node_t* n, pin_t* p)
+        {
+            for (int i = 0; i < n->out_pins.size(); i++)
+            {
+                if (n->out_pins[i] == p) return i;
             }
             return -1;
         };
@@ -553,8 +840,8 @@ namespace graph_layout
 
             replace(tail_name.begin(), tail_name.end(), ' ', '_');
             replace(head_name.begin(), head_name.end(), ' ', '_');
-            ss << "g.add_edge(" << "pin_" << tail_name << "_out" << find_pin_index(edge->tail->owner, edge->tail)
-                << ", " << "pin_" << head_name << "_in" << find_pin_index(edge->head->owner, edge->head) << ");" << endl;
+            ss << "g.add_edge(" << "pin_" << tail_name << "_out" << find_out_pin_index(edge->tail->owner, edge->tail)
+                << ", " << "pin_" << head_name << "_in" << find_in_pin_index(edge->head->owner, edge->head) << ");" << endl;
         }
         ofstream ofile;
         ofile.open("test.cpp");
