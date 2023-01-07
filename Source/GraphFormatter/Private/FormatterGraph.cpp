@@ -1192,7 +1192,7 @@ void FFormatterGraph::DoLayering()
 
     if (FFormatter::Instance().IsBehaviorTree)
     {
-        for (auto Layer : LayeredList)
+        for (auto& Layer : LayeredList)
         {
             Layer.Sort(BehaviorTreeNodeComparer);
         }
