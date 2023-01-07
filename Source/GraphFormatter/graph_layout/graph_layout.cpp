@@ -18,6 +18,416 @@ namespace graph_layout
 {
     using namespace std;
 
+    class fas_positioning_strategy_t
+    {
+    public:
+        bool is_horizontal_dir;
+        vector2_t spacing{80, 80};
+        vector<vector<node_t*>>& layers;
+        vector<rect_t> layers_bound;
+        void assign_coordinate();
+
+    private:
+        void initialize();
+        void mark_conflicts();
+        void do_vertical_alignment();
+        void calculate_inner_shift();
+        void place_block(node_t* block_root);
+        void compact();
+        void one_pass();
+        void combine();
+        bool is_upper_dir = true;
+        bool is_left_dir = true;
+        map<node_t*, node_t*> conflict_marks;
+        map<node_t*, node_t*> root_map;
+        map<node_t*, node_t*> align_map;
+        map<node_t*, node_t*> sink_map;
+        map<node_t*, float> shift_map;
+        map<node_t*, float> inner_shift_map;
+        map<node_t*, float>* x_map;
+        map<node_t*, int> index_map;
+        map<node_t*, float> block_width_map;
+        map<node_t*, node_t*> predecessor_map;
+        map<node_t*, node_t*> successor_map;
+        map<node_t*, float> upper_left_pos_map;
+        map<node_t*, float> upper_right_pos_map;
+        map<node_t*, float> lower_left_pos_map;
+        map<node_t*, float> lower_right_pos_map;
+        map<node_t*, float> combined_pos_map;
+    };
+
+    void fas_positioning_strategy_t::assign_coordinate()
+    {
+        initialize();
+        is_upper_dir = true;
+        is_left_dir = true;
+        x_map = &upper_left_pos_map;
+        one_pass();
+
+        is_upper_dir = true;
+        is_left_dir = false;
+        x_map = &upper_right_pos_map;
+        one_pass();
+
+        is_upper_dir = false;
+        is_left_dir = true;
+        x_map = &lower_left_pos_map;
+        one_pass();
+
+        is_upper_dir = false;
+        is_left_dir = false;
+        x_map = &lower_right_pos_map;
+        one_pass();
+
+        combine();
+    }
+
+    void fas_positioning_strategy_t::initialize()
+    {
+        for (auto& layer : layers)
+        {
+            for (int i = 0; i < layer.size(); i++)
+            {
+                index_map.insert(make_pair(layer[i], i));
+                if (i != 0)
+                {
+                    predecessor_map.insert(make_pair(layer[i], layer[i - 1]));
+                }
+                else
+                {
+                    predecessor_map.insert(make_pair(layer[i], nullptr));
+                }
+                if (i != static_cast<int>(layer.size() - 1))
+                {
+                    successor_map.insert(make_pair(layer[i], layer[i + 1]));
+                }
+                else
+                {
+                    successor_map.insert(make_pair(layer[i], nullptr));
+                }
+            }
+        }
+        mark_conflicts();
+    }
+
+    void fas_positioning_strategy_t::mark_conflicts()
+    {
+        for (int i = 1; i < layers.size() - 1; i++)
+        {
+            int k0 = 0;
+            int l = 1;
+            for (int l1 = 0; l1 < layers[i + 1].size(); l1++)
+            {
+                auto node = layers[i + 1][l1];
+                bool is_crossing_inner_segment = node->is_crossing_inner_segment(layers[i + 1], layers[i]);
+                if (l1 == layers[i + 1].size() - 1 || is_crossing_inner_segment)
+                {
+                    int k1 = layers[i].size();
+                    if (is_crossing_inner_segment)
+                    {
+                        const auto median_upper = node->get_median_upper();
+                        k1 = index_map[median_upper];
+                    }
+                    while (l < l1)
+                    {
+                        auto upper_nodes = node->get_uppers();
+                        for (auto upper_node : upper_nodes)
+                        {
+                            auto k = index_map[upper_node];
+                            if (k < k0 || k > k1)
+                            {
+                                conflict_marks.insert(make_pair(upper_node, node));
+                            }
+                        }
+                        ++l;
+                    }
+                    k0 = k1;
+                }
+            }
+        }
+    }
+
+    void fas_positioning_strategy_t::do_vertical_alignment()
+    {
+        root_map.clear();
+        align_map.clear();
+        for (auto layer : layers)
+        {
+            for (auto node : layer)
+            {
+                root_map.insert(make_pair(node, node));
+                align_map.insert(make_pair(node, node));
+            }
+        }
+        int layer_step = is_upper_dir ? 1 : -1;
+        int layer_start = is_upper_dir ? 0 : layers.size() - 1;
+        int layer_end = is_upper_dir ? layers.size() : -1;
+        for (int i = layer_start; i != layer_end; i += layer_step)
+        {
+            int guide = is_left_dir ? -1 : INT_MAX;
+            int step = is_left_dir ? 1 : -1;
+            int start = is_left_dir ? 0 : layers[i].size() - 1;
+            int end = is_left_dir ? layers[i].size() : -1;
+            for (int k = start; k != end; k += step)
+            {
+                auto node = layers[i][k];
+                auto adjacencies = is_upper_dir ? node->get_uppers() : node->get_lowers();
+                if (adjacencies.size() > 0)
+                {
+                    int ma = trunc((adjacencies.size() + 1) / 2.0f - 1);
+                    int mb = ceil((adjacencies.size() + 1) / 2.0f - 1);
+                    for (int m = ma; m <= mb; m++)
+                    {
+                        if (align_map[node] == node)
+                        {
+                            auto& median_node = adjacencies[m];
+                            bool is_marked = conflict_marks.find(median_node) != conflict_marks.end() && conflict_marks[median_node] == node;
+                            float max_weight = median_node->get_max_weight(!is_upper_dir);
+                            float link_weight = node->get_max_weight_to_node(median_node, is_upper_dir);
+                            const auto median_node_pos = index_map[median_node];
+                            bool guide_accepted = is_left_dir ? median_node_pos > guide : median_node_pos < guide;
+                            if (!is_marked)
+                            {
+                                if (guide_accepted && link_weight == max_weight)
+                                {
+                                    align_map[median_node] = node;
+                                    root_map[node] = root_map[median_node];
+                                    align_map[node] = root_map[node];
+                                    guide = median_node_pos;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void fas_positioning_strategy_t::calculate_inner_shift()
+    {
+        inner_shift_map.clear();
+        block_width_map.clear();
+        for (auto& layer : layers)
+        {
+            for (auto node : layer)
+            {
+                if (root_map[node] == node)
+                {
+                    inner_shift_map.insert(make_pair(node, 0.0f));
+                    float left = 0, right = is_horizontal_dir ? node->size.y : node->size.x;
+                    auto root_node = node;
+                    auto upper_node = node;
+                    auto lower_node = align_map[root_node];
+                    while (true)
+                    {
+                        const float upper_position = upper_node->get_linked_position_to_node(lower_node, !is_upper_dir, is_horizontal_dir);
+                        const float lower_position = lower_node->get_linked_position_to_node(upper_node, is_upper_dir, is_horizontal_dir);
+                        const float shift = inner_shift_map[upper_node] + upper_position - lower_position;
+                        inner_shift_map[lower_node] = shift;
+                        left = std::min(left, shift);
+                        right = std::max(right, shift + (is_horizontal_dir ? lower_node->size.y : lower_node->size.x));
+                        upper_node = lower_node;
+                        lower_node = align_map[upper_node];
+                        if (lower_node == root_node)
+                        {
+                            break;
+                        }
+                    }
+                    auto check_node = node;
+                    do
+                    {
+                        inner_shift_map[check_node] -= left;
+                        check_node = align_map[check_node];
+                    }
+                    while (check_node != node);
+                    block_width_map[node] = right - left;
+                }
+            }
+        }
+    }
+
+    void fas_positioning_strategy_t::place_block(node_t* block_root)
+    {
+        if (std::isnan((*x_map)[block_root]))
+        {
+            bool initial = true;
+            (*x_map)[block_root] = 0;
+            auto node = block_root;
+            do
+            {
+                const auto adjacency = is_left_dir ? predecessor_map[node] : successor_map[node];
+                if (adjacency != nullptr)
+                {
+                    float adjacency_height, node_height;
+                    float spacing1;
+                    if (is_horizontal_dir)
+                    {
+                        adjacency_height = adjacency->size.y;
+                        node_height = node->size.y;
+                        spacing1 = spacing.y;
+                    }
+                    else
+                    {
+                        adjacency_height = adjacency->size.x;
+                        node_height = node->size.x;
+                        spacing1 = spacing.x;
+                    }
+
+                    const auto prev_block_root = root_map[adjacency];
+                    place_block(prev_block_root);
+                    if (sink_map[block_root] == block_root)
+                    {
+                        sink_map[block_root] = sink_map[prev_block_root];
+                    }
+                    if (sink_map[block_root] != sink_map[prev_block_root])
+                    {
+                        float left_shift = (*x_map)[block_root] - (*x_map)[prev_block_root] + inner_shift_map[node] - inner_shift_map[adjacency] - adjacency_height - spacing1;
+                        float right_shift = (*x_map)[block_root] - (*x_map)[prev_block_root] - inner_shift_map[node] + inner_shift_map[adjacency] + node_height + spacing1;
+                        float shift = is_left_dir ? std::min(shift_map[sink_map[prev_block_root]], left_shift) : std::max(shift_map[sink_map[prev_block_root]], right_shift);
+                        shift_map[sink_map[prev_block_root]] = shift;
+                    }
+                    else
+                    {
+                        float left_shift = inner_shift_map[adjacency] + adjacency_height - inner_shift_map[node] + spacing1;
+                        float right_shift = -node_height - spacing1 + inner_shift_map[adjacency] - inner_shift_map[node];
+                        float shift = is_left_dir ? left_shift : right_shift;
+                        float position = (*x_map)[prev_block_root] + shift;
+                        if (initial)
+                        {
+                            (*x_map)[block_root] = position;
+                            initial = false;
+                        }
+                        else
+                        {
+                            position = is_left_dir ? std::max((*x_map)[block_root], position) : std::min((*x_map)[block_root], position);
+                            (*x_map)[block_root] = position;
+                        }
+                    }
+                }
+                node = align_map[node];
+            }
+            while (node != block_root);
+        }
+    }
+
+    void fas_positioning_strategy_t::compact()
+    {
+        sink_map.clear();
+        shift_map.clear();
+        x_map->clear();
+        for (auto& layer : layers)
+        {
+            for (auto node : layer)
+            {
+                sink_map.insert(make_pair(node, node));
+                if (is_left_dir)
+                {
+                    inner_shift_map.insert(make_pair(node, FLT_MAX));
+                }
+                else
+                {
+                    shift_map.insert(make_pair(node, -FLT_MAX));
+                }
+                x_map->insert(make_pair(node, NAN));
+            }
+        }
+        for (auto& layer : layers)
+        {
+            for (auto node : layer)
+            {
+                if (root_map[node] == node)
+                {
+                    place_block(node);
+                }
+            }
+        }
+        for (auto& layer : layers)
+        {
+            for (auto node : layer)
+            {
+                auto& root_node = root_map[node];
+                (*x_map)[node] = (*x_map)[root_node];
+            }
+        }
+        for (auto& layer : layers)
+        {
+            for (auto node : layer)
+            {
+                auto& root_node = root_map[node];
+                const float shift = shift_map[sink_map[root_node]];
+                if ((is_left_dir && shift < FLT_MAX) || (!is_left_dir && shift > -FLT_MAX))
+                {
+                    (*x_map)[node] = (*x_map)[node] + shift;
+                }
+            }
+        }
+        for (auto& layer : layers)
+        {
+            for (auto node : layer)
+            {
+                (*x_map)[node] += inner_shift_map[node];
+            }
+        }
+    }
+
+    void fas_positioning_strategy_t::one_pass()
+    {
+        do_vertical_alignment();
+        calculate_inner_shift();
+        compact();
+    }
+
+    void fas_positioning_strategy_t::combine()
+    {
+        vector layouts = {upper_left_pos_map, upper_right_pos_map, lower_left_pos_map, lower_right_pos_map};
+        vector<tuple<float, float>> bounds;
+        bounds.resize(layouts.size());
+        int min_width_index = -1;
+        float min_width = FLT_MAX;
+        for (int i = 0; i < layouts.size(); i++)
+        {
+            auto& layout = layouts[i];
+            float left_most = FLT_MAX, right_most = -FLT_MAX;
+            for (auto& Pair : layout)
+            {
+                if (Pair.second < left_most)
+                {
+                    left_most = Pair.second;
+                }
+                if (Pair.second > right_most)
+                {
+                    right_most = Pair.second;
+                }
+            }
+            if (right_most - left_most < min_width)
+            {
+                min_width = right_most - left_most;
+                min_width_index = i;
+            }
+            bounds[i] = tuple(left_most, right_most);
+        }
+        for (int i = 0; i < layouts.size(); i++)
+        {
+            if (i != min_width_index)
+            {
+                float offset = std::get<0>(bounds[min_width_index]) - std::get<0>(bounds[i]);
+                for (auto& pair : layouts[i])
+                {
+                    pair.second += offset;
+                }
+            }
+        }
+        for (auto& layer : layers)
+        {
+            for (auto node : layer)
+            {
+                vector<float> Values = {layouts[0][node], layouts[1][node], layouts[2][node], layouts[3][node]};
+                combined_pos_map.insert(make_pair(node, (Values[2] + Values[3]) / 2.0f));
+            }
+        }
+        x_map = &combined_pos_map;
+    }
+
     static void dfs(const node_t* node, set<node_t*>& visited_set, function<void(node_t*)> on_visit, function<void(edge_t*)> on_non_tree_edge_found)
     {
         for (auto e : node->out_edges)
@@ -68,6 +478,11 @@ namespace graph_layout
     {
         return (tail->index_in_layer < other->tail->index_in_layer && head->index_in_layer > other->head->index_in_layer) ||
             (tail->index_in_layer > other->tail->index_in_layer && head->index_in_layer < other->head->index_in_layer);
+    }
+
+    bool edge_t::is_inner_segment()
+    {
+        return tail->owner->is_dummy_node && head->owner->is_dummy_node;
     }
 
     bool node_t::is_descendant_of(node_t* node) const
@@ -130,6 +545,23 @@ namespace graph_layout
         return result;
     }
 
+    bool node_t::is_crossing_inner_segment(const vector<node_t*>& lower_layer, const vector<node_t*>& upper_layer)
+    {
+        auto edges_linked_to_upper = get_edges_linked_to_layer(upper_layer, true);
+        auto edges_between_layers = graph_t::get_edges_between_two_layers(lower_layer, upper_layer, this);
+        for (auto edge_linked_to_upper : edges_linked_to_upper)
+        {
+            for (auto edge_between_layers : edges_between_layers)
+            {
+                if (edge_between_layers->is_inner_segment() && edge_linked_to_upper->is_crossing(edge_between_layers))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     float node_t::get_barycenter_in_layer(std::vector<node_t*> layer, bool is_in)
     {
         auto edges = get_edges_linked_to_layer(layer, is_in);
@@ -183,6 +615,103 @@ namespace graph_layout
             in_nodes.insert(e->head->owner);
         }
         return in_nodes;
+    }
+
+    node_t* node_t::get_median_upper() const
+    {
+        vector<node_t*> upper_nodes;
+        for (auto edge : in_edges)
+        {
+            auto it = find(upper_nodes.begin(), upper_nodes.end(), edge->tail->owner);
+            if (it == upper_nodes.end())
+            {
+                upper_nodes.push_back(edge->tail->owner);
+            }
+        }
+        if (!upper_nodes.empty())
+        {
+            int index = upper_nodes.size() / 2;
+            return upper_nodes[index];
+        }
+        return nullptr;
+    }
+
+    vector<node_t*> node_t::get_uppers() const
+    {
+        set<node_t*> upper_nodes;
+        for (auto edge : in_edges)
+        {
+            upper_nodes.insert(edge->tail->owner);
+        }
+        return vector(upper_nodes.begin(), upper_nodes.end());
+    }
+
+    vector<node_t*> node_t::get_lowers() const
+    {
+        set<node_t*> lower_nodes;
+        for (auto edge : out_edges)
+        {
+            lower_nodes.insert(edge->head->owner);
+        }
+        return vector(lower_nodes.begin(), lower_nodes.end());
+    }
+
+    float node_t::get_max_weight(bool is_in)
+    {
+        auto& edges = is_in ? in_edges : out_edges;
+        float max_weight = -FLT_MAX;
+        for (auto e : edges)
+        {
+            if (max_weight < e->weight)
+            {
+                max_weight = e->weight;
+            }
+        }
+        return max_weight;
+    }
+
+    float node_t::get_max_weight_to_node(const node_t* node, bool is_in)
+    {
+        auto& edges = is_in ? in_edges : out_edges;
+        float max_weight = -FLT_MAX;
+        for (auto e : edges)
+        {
+            auto node_to_check = is_in ? e->tail->owner : e->head->owner;
+            if (node_to_check == node && max_weight < e->weight)
+            {
+                max_weight = e->weight;
+            }
+        }
+        return max_weight;
+    }
+
+    float node_t::get_linked_position_to_node(const node_t* Node, bool is_in, bool is_horizontal_dir)
+    {
+        auto& edges = is_in ? in_edges : out_edges;
+        float median_position = 0.0f;
+        int count = 0;
+        for (auto Edge : edges)
+        {
+            auto pin = is_in ? Edge->head : Edge->tail;
+            auto pin_to_check = is_in ? Edge->tail : Edge->head;
+            if (pin_to_check->owner == Node)
+            {
+                if (is_horizontal_dir)
+                {
+                    median_position += pin->offset.y;
+                }
+                else
+                {
+                    median_position += pin->offset.x;
+                }
+                ++count;
+            }
+        }
+        if (count == 0)
+        {
+            return 0.0f;
+        }
+        return median_position / count;
     }
 
     node_t::~node_t()
@@ -652,7 +1181,7 @@ namespace graph_layout
         }
     }
 
-    std::vector<std::vector<node_t*>> graph_t::ordering()
+    void graph_t::ordering()
     {
         auto order = layers;
         auto best = layers;
@@ -667,7 +1196,32 @@ namespace graph_layout
                 best_crossing = new_crossing;
             }
         }
-        return best;
+        layers = best;
+    }
+
+    void graph_t::assign_x_coordinate()
+    {
+        auto layers_bound = get_layers_bound();
+        node_t* first_node = layers[0][0];
+        auto old_position = first_node->position;
+    }
+
+    std::vector<rect_t> graph_t::get_layers_bound() const
+    {
+        vector<rect_t> layers_bound;
+        rect_t total_bound{0, 0, -spacing.x, -spacing.y};
+        for (const auto& layer : layers)
+        {
+            vector2_t position = vector2_t{total_bound.r, total_bound.b} + spacing;
+            rect_t layer_bound{position.x, position.y, position.x, position.y};
+            for (auto n : layer)
+            {
+                layer_bound = layer_bound.expand(position, n->size);
+            }
+            layers_bound.push_back(layer_bound);
+            total_bound = total_bound.expand(layer_bound);
+        }
+        return layers_bound;
     }
 
     void graph_t::sort_layers(std::vector<std::vector<node_t*>> layer_vec, bool is_down)
@@ -727,7 +1281,7 @@ namespace graph_layout
         }
     }
 
-    std::vector<edge_t*> graph_t::get_edges_between_two_layers(std::vector<node_t*> lower, std::vector<node_t*> upper) const
+    std::vector<edge_t*> graph_t::get_edges_between_two_layers(std::vector<node_t*> lower, std::vector<node_t*> upper, const node_t* excluded_node)
     {
         vector<edge_t*> result;
         for (auto n : lower)
