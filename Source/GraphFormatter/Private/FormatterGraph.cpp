@@ -800,12 +800,12 @@ bool FFormatterGraph::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedN
     }
 }
 
-FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes)
+FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment)
 {
     FFormatterNode* Node = new FFormatterNode(CommentNode);
-    if (SelectedNodes.Num() > 0)
+    if (NodesUnderComment.Num() > 0)
     {
-        FFormatterGraph* SubGraph = new FFormatterGraph(SelectedNodes);
+        FFormatterGraph* SubGraph = new FFormatterGraph(NodesUnderComment);
         float BorderHeight = FFormatter::Instance().GetCommentNodeTitleHeight(CommentNode);
         const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
         SubGraph->SetBorder(Settings.CommentBorder, BorderHeight + Settings.CommentBorder, Settings.CommentBorder, Settings.CommentBorder);
@@ -1168,8 +1168,6 @@ TArray<TArray<FFormatterNode*>> GetLayeredListFromNewGraph(const FFormatterGraph
         }
     }
 
-    std::set<graph_layout::edge_t*> non_tree_edges;
-    //g.feasible_tree(non_tree_edges);
     g.rank();
     TArray<TArray<FFormatterNode*>> LayeredList;
     TMap<int, TArray<FFormatterNode*>> LayerMap;

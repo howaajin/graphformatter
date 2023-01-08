@@ -148,7 +148,7 @@ private:
     void SortInLayer(TArray<TArray<FFormatterNode*>>& Order, EEdGraphPinDirection Direction);
     void DoOrderingSweep();
     void DoPositioning();
-    static FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes);
+    static FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment);
     static FFormatterNode* CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group);
     FFormatterNode* FindSourceNode() const;
     FFormatterNode* FindSinkNode() const;
