@@ -800,7 +800,7 @@ bool FFormatterGraph::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedN
     }
 }
 
-FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes) const
+FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> SelectedNodes)
 {
     FFormatterNode* Node = new FFormatterNode(CommentNode);
     if (SelectedNodes.Num() > 0)
@@ -814,7 +814,7 @@ FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, 
     return Node;
 }
 
-FFormatterNode* FFormatterGraph::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group) const
+FFormatterNode* FFormatterGraph::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group)
 {
     FFormatterNode* Node = new FFormatterNode();
     Node->OriginalNode = MainNode;
