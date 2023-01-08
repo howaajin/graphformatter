@@ -86,42 +86,42 @@ namespace graph_layout
         bool is_inverted = false;
         int length() const;
         int slack() const;
-        bool is_crossing(edge_t* other);
-        bool is_inner_segment();
+        bool is_crossing(const edge_t* other) const;
+        bool is_inner_segment() const;
     };
 
     struct node_t
     {
         std::string name;
+        bool is_dummy_node = false;
         int rank{-1};
         float layer_order = -1.0f;
         // Is the node belongs to the head component?
         bool belongs_to_head = false;
         // Is the node belongs to the tail component?
         bool belongs_to_tail = false;
-        bool is_dummy_node = false;
         graph_t* graph = nullptr;
         vector2_t position{0, 0};
         vector2_t size{50, 50};
-        std::vector<edge_t*> in_edges;
-        std::vector<edge_t*> out_edges;
-        std::vector<pin_t*> in_pins;
-        std::vector<pin_t*> out_pins;
+        std::vector<edge_t*> in_edges{};
+        std::vector<edge_t*> out_edges{};
+        std::vector<pin_t*> in_pins{};
+        std::vector<pin_t*> out_pins{};
         bool is_descendant_of(node_t* node) const;
         void set_position(vector2_t p);
         pin_t* add_pin(pin_type_t type);
-        std::vector<edge_t*> get_edges_linked_to_layer(std::vector<node_t*> layer, bool is_in);
-        bool is_crossing_inner_segment(const std::vector<node_t*>& lower_layer, const std::vector<node_t*>& upper_layer);
-        float get_barycenter_in_layer(std::vector<node_t*> layer, bool is_in);
-        std::set<node_t*> get_direct_connected_nodes(std::function<bool(edge_t*)> filter) const;
+        std::vector<edge_t*> get_edges_linked_to_layer(const std::vector<node_t*>& layer, bool is_in) const;
+        bool is_crossing_inner_segment(const std::vector<node_t*>& lower_layer, const std::vector<node_t*>& upper_layer) const;
+        float get_barycenter_in_layer(const std::vector<node_t*>& layer, bool is_in) const;
+        std::set<node_t*> get_direct_connected_nodes(const std::function<bool(edge_t*)>& filter) const;
         std::set<node_t*> get_out_nodes() const;
         std::set<node_t*> get_in_nodes() const;
         node_t* get_median_upper() const;
         std::vector<node_t*> get_uppers() const;
         std::vector<node_t*> get_lowers() const;
-        float get_max_weight(bool is_in);
-        float get_max_weight_to_node(const node_t* node, bool is_in);
-        float get_linked_position_to_node(const node_t* Node, bool is_in, bool is_horizontal_dir = true);
+        float get_max_weight(bool is_in) const;
+        float get_max_weight_to_node(const node_t* node, bool is_in) const;
+        float get_linked_position_to_node(const node_t* node, bool is_in, bool is_horizontal_dir = true) const;
 
         node_t* clone() const;
         ~node_t();
@@ -186,23 +186,24 @@ namespace graph_layout
         void translate(vector2_t offset);
         void set_position(vector2_t position);
         void acyclic() const;
-        void rank();
-        void add_dummy_nodes(tree_t& feasible_tree);
+        void rank() const;
+        void add_dummy_nodes(tree_t* feasible_tree);
         void assign_layers();
         void ordering();
-        void assign_x_coordinate();
+        rect_t assign_coordinate();
         std::vector<rect_t> get_layers_bound() const;
-        void sort_layers(std::vector<std::vector<node_t*>> layer_vec, bool is_down);
-        void calculate_pins_index_in_layer(std::vector<node_t*>& layer) const;
-        static std::vector<edge_t*> get_edges_between_two_layers(std::vector<node_t*> lower, std::vector<node_t*> upper, const node_t* excluded_node = nullptr);
-        size_t crossing(std::vector<std::vector<node_t*>>& order, bool calculate_pins_index) const;
-        tree_t feasible_tree();
+        void sort_layers(std::vector<std::vector<node_t*>>& layer_vec, bool is_down) const;
+        tree_t feasible_tree() const;
         std::string generate_test_code();
+
+        static void calculate_pins_index_in_layer(const std::vector<node_t*>& layer);
+        static std::vector<edge_t*> get_edges_between_two_layers(const std::vector<node_t*>& lower, const std::vector<node_t*>& upper, const node_t* excluded_node = nullptr);
+        static size_t crossing(const std::vector<std::vector<node_t*>>& order, bool calculate_pins_index);
         static void test();
 
     private:
-        void init_rank();
-        void normalize();
+        void init_rank() const;
+        void normalize() const;
         tree_t tight_tree() const;
         std::vector<node_t*> get_nodes_without_unscanned_in_edges(const std::set<node_t*>& visited, const std::set<edge_t*>& scanned_set) const;
     };

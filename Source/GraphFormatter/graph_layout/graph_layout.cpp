@@ -18,15 +18,31 @@ namespace graph_layout
 {
     using namespace std;
 
-    class fas_positioning_strategy_t
+    struct fas_positioning_strategy_t
     {
-    public:
-        bool is_horizontal_dir;
-        vector2_t spacing{80, 80};
         vector<vector<node_t*>>& layers;
+        bool is_horizontal_dir;
         vector<rect_t> layers_bound;
-        void assign_coordinate();
-
+        vector2_t spacing{80, 80};
+        bool is_upper_dir = true;
+        bool is_left_dir = true;
+        map<node_t*, node_t*> conflict_marks{};
+        map<node_t*, node_t*> root_map{};
+        map<node_t*, node_t*> align_map{};
+        map<node_t*, node_t*> sink_map{};
+        map<node_t*, float> shift_map{};
+        map<node_t*, float> inner_shift_map{};
+        map<node_t*, float>* x_map{};
+        map<node_t*, size_t> index_map{};
+        map<node_t*, float> block_width_map{};
+        map<node_t*, node_t*> predecessor_map{};
+        map<node_t*, node_t*> successor_map{};
+        map<node_t*, float> upper_left_pos_map{};
+        map<node_t*, float> upper_right_pos_map{};
+        map<node_t*, float> lower_left_pos_map{};
+        map<node_t*, float> lower_right_pos_map{};
+        map<node_t*, float> combined_pos_map{};
+        rect_t assign_coordinate();
     private:
         void initialize();
         void mark_conflicts();
@@ -36,28 +52,13 @@ namespace graph_layout
         void compact();
         void one_pass();
         void combine();
-        bool is_upper_dir = true;
-        bool is_left_dir = true;
-        map<node_t*, node_t*> conflict_marks;
-        map<node_t*, node_t*> root_map;
-        map<node_t*, node_t*> align_map;
-        map<node_t*, node_t*> sink_map;
-        map<node_t*, float> shift_map;
-        map<node_t*, float> inner_shift_map;
-        map<node_t*, float>* x_map;
-        map<node_t*, int> index_map;
-        map<node_t*, float> block_width_map;
-        map<node_t*, node_t*> predecessor_map;
-        map<node_t*, node_t*> successor_map;
-        map<node_t*, float> upper_left_pos_map;
-        map<node_t*, float> upper_right_pos_map;
-        map<node_t*, float> lower_left_pos_map;
-        map<node_t*, float> lower_right_pos_map;
-        map<node_t*, float> combined_pos_map;
     };
 
-    void fas_positioning_strategy_t::assign_coordinate()
+    rect_t fas_positioning_strategy_t::assign_coordinate()
     {
+        node_t* first_node = layers[0][0];
+        const vector2_t old_position = first_node->position;
+
         initialize();
         is_upper_dir = true;
         is_left_dir = true;
@@ -80,31 +81,75 @@ namespace graph_layout
         one_pass();
 
         combine();
+
+        for (int i = 0; i < layers.size(); i++)
+        {
+            auto& layer = layers[i];
+            for (auto node : layer)
+            {
+                float x, y;
+                float *p_x, *p_y;
+                if (is_horizontal_dir)
+                {
+                    p_x = &x;
+                    p_y = &y;
+                }
+                else
+                {
+                    p_x = &y;
+                    p_y = &x;
+                }
+                if (node->in_edges.empty())
+                {
+                    if (is_horizontal_dir)
+                    {
+                        *p_x = layers_bound[i].r - node->size.x;
+                    }
+                    else
+                    {
+                        *p_x = layers_bound[i].b - node->size.y;
+                    }
+                }
+                else
+                {
+                    if (is_horizontal_dir)
+                    {
+                        *p_x = layers_bound[i].l;
+                    }
+                    else
+                    {
+                        *p_x = layers_bound[i].t;
+                    }
+                }
+                *p_y = (*x_map)[node];
+                node->set_position(vector2_t{x, y});
+            }
+        }
+        const vector2_t position = first_node->position;
+        const vector2_t offset = old_position - position;
+        const auto& bound_pos = first_node->position;
+        rect_t bound{bound_pos.x, bound_pos.y, bound_pos.x, bound_pos.y};
+        for (auto& layer : layers)
+        {
+            for (auto node : layer)
+            {
+                node->set_position(node->position + offset);
+                bound = bound.expand(node->position, node->size);
+            }
+        }
+        return bound;
     }
 
     void fas_positioning_strategy_t::initialize()
     {
         for (auto& layer : layers)
         {
-            for (int i = 0; i < layer.size(); i++)
+            for (size_t i = 0; i < layer.size(); i++)
             {
-                index_map.insert(make_pair(layer[i], i));
-                if (i != 0)
-                {
-                    predecessor_map.insert(make_pair(layer[i], layer[i - 1]));
-                }
-                else
-                {
-                    predecessor_map.insert(make_pair(layer[i], nullptr));
-                }
-                if (i != static_cast<int>(layer.size() - 1))
-                {
-                    successor_map.insert(make_pair(layer[i], layer[i + 1]));
-                }
-                else
-                {
-                    successor_map.insert(make_pair(layer[i], nullptr));
-                }
+                auto node = layer[i];
+                index_map[node] = i;
+                predecessor_map[node] = i == 0 ? nullptr : layer[i - 1];
+                successor_map[node] = i == layer.size() - 1 ? nullptr : layer[i + 1];
             }
         }
         mark_conflicts();
@@ -151,7 +196,7 @@ namespace graph_layout
     {
         root_map.clear();
         align_map.clear();
-        for (auto layer : layers)
+        for (const auto& layer : layers)
         {
             for (auto node : layer)
             {
@@ -172,7 +217,7 @@ namespace graph_layout
             {
                 auto node = layers[i][k];
                 auto adjacencies = is_upper_dir ? node->get_uppers() : node->get_lowers();
-                if (adjacencies.size() > 0)
+                if (!adjacencies.empty())
                 {
                     int ma = trunc((adjacencies.size() + 1) / 2.0f - 1);
                     int mb = ceil((adjacencies.size() + 1) / 2.0f - 1);
@@ -380,23 +425,22 @@ namespace graph_layout
     void fas_positioning_strategy_t::combine()
     {
         vector layouts = {upper_left_pos_map, upper_right_pos_map, lower_left_pos_map, lower_right_pos_map};
-        vector<tuple<float, float>> bounds;
-        bounds.resize(layouts.size());
+        vector<tuple<float, float>> bounds(layouts.size());
         int min_width_index = -1;
         float min_width = FLT_MAX;
         for (int i = 0; i < layouts.size(); i++)
         {
             auto& layout = layouts[i];
             float left_most = FLT_MAX, right_most = -FLT_MAX;
-            for (auto& Pair : layout)
+            for (auto& pair : layout)
             {
-                if (Pair.second < left_most)
+                if (pair.second < left_most)
                 {
-                    left_most = Pair.second;
+                    left_most = pair.second;
                 }
-                if (Pair.second > right_most)
+                if (pair.second > right_most)
                 {
-                    right_most = Pair.second;
+                    right_most = pair.second;
                 }
             }
             if (right_most - left_most < min_width)
@@ -421,14 +465,14 @@ namespace graph_layout
         {
             for (auto node : layer)
             {
-                vector<float> Values = {layouts[0][node], layouts[1][node], layouts[2][node], layouts[3][node]};
-                combined_pos_map.insert(make_pair(node, (Values[2] + Values[3]) / 2.0f));
+                vector values = {layouts[0][node], layouts[1][node], layouts[2][node], layouts[3][node]};
+                combined_pos_map[node] = (values[2] + values[3]) / 2.0f;
             }
         }
         x_map = &combined_pos_map;
     }
 
-    static void dfs(const node_t* node, set<node_t*>& visited_set, function<void(node_t*)> on_visit, function<void(edge_t*)> on_non_tree_edge_found)
+    static void dfs(const node_t* node, set<node_t*>& visited_set, const function<void(node_t*)>& on_visit, const function<void(edge_t*)>& on_non_tree_edge_found)
     {
         for (auto e : node->out_edges)
         {
@@ -446,7 +490,7 @@ namespace graph_layout
         }
     }
 
-    static void dfs_inv(const node_t* node, set<node_t*>& visited_set, function<void(node_t*)> on_visit, function<void(edge_t*)> on_non_tree_edge_found)
+    static void dfs_inv(const node_t* node, set<node_t*>& visited_set, const function<void(node_t*)>& on_visit, const function<void(edge_t*)>& on_non_tree_edge_found)
     {
         for (auto e : node->in_edges)
         {
@@ -474,13 +518,13 @@ namespace graph_layout
         return length() - min_length;
     }
 
-    bool edge_t::is_crossing(edge_t* other)
+    bool edge_t::is_crossing(const edge_t* other) const
     {
         return (tail->index_in_layer < other->tail->index_in_layer && head->index_in_layer > other->head->index_in_layer) ||
             (tail->index_in_layer > other->tail->index_in_layer && head->index_in_layer < other->head->index_in_layer);
     }
 
-    bool edge_t::is_inner_segment()
+    bool edge_t::is_inner_segment() const
     {
         return tail->owner->is_dummy_node && head->owner->is_dummy_node;
     }
@@ -527,7 +571,7 @@ namespace graph_layout
         return pin;
     }
 
-    std::vector<edge_t*> node_t::get_edges_linked_to_layer(std::vector<node_t*> layer, bool is_in)
+    vector<edge_t*> node_t::get_edges_linked_to_layer(const std::vector<node_t*>& layer, bool is_in) const
     {
         vector<edge_t*> result;
         auto edges = is_in ? in_edges : out_edges;
@@ -535,7 +579,7 @@ namespace graph_layout
         {
             for (auto layer_node : layer)
             {
-                auto n = is_in ? e->head->owner : e->tail->owner;
+                auto n = is_in ? e->tail->owner : e->head->owner;
                 if (n == layer_node)
                 {
                     result.push_back(e);
@@ -545,7 +589,7 @@ namespace graph_layout
         return result;
     }
 
-    bool node_t::is_crossing_inner_segment(const vector<node_t*>& lower_layer, const vector<node_t*>& upper_layer)
+    bool node_t::is_crossing_inner_segment(const vector<node_t*>& lower_layer, const vector<node_t*>& upper_layer) const
     {
         auto edges_linked_to_upper = get_edges_linked_to_layer(upper_layer, true);
         auto edges_between_layers = graph_t::get_edges_between_two_layers(lower_layer, upper_layer, this);
@@ -562,7 +606,7 @@ namespace graph_layout
         return false;
     }
 
-    float node_t::get_barycenter_in_layer(std::vector<node_t*> layer, bool is_in)
+    float node_t::get_barycenter_in_layer(const std::vector<node_t*>& layer, bool is_in) const
     {
         auto edges = get_edges_linked_to_layer(layer, is_in);
         if (edges.empty())
@@ -577,7 +621,7 @@ namespace graph_layout
         return sum / static_cast<float>(edges.size());
     }
 
-    set<node_t*> node_t::get_direct_connected_nodes(function<bool(edge_t*)> filter) const
+    set<node_t*> node_t::get_direct_connected_nodes(const function<bool(edge_t*)>& filter) const
     {
         set<node_t*> result;
         for (auto e : in_edges)
@@ -656,7 +700,7 @@ namespace graph_layout
         return vector(lower_nodes.begin(), lower_nodes.end());
     }
 
-    float node_t::get_max_weight(bool is_in)
+    float node_t::get_max_weight(bool is_in) const
     {
         auto& edges = is_in ? in_edges : out_edges;
         float max_weight = -FLT_MAX;
@@ -670,7 +714,7 @@ namespace graph_layout
         return max_weight;
     }
 
-    float node_t::get_max_weight_to_node(const node_t* node, bool is_in)
+    float node_t::get_max_weight_to_node(const node_t* node, bool is_in) const
     {
         auto& edges = is_in ? in_edges : out_edges;
         float max_weight = -FLT_MAX;
@@ -685,7 +729,7 @@ namespace graph_layout
         return max_weight;
     }
 
-    float node_t::get_linked_position_to_node(const node_t* Node, bool is_in, bool is_horizontal_dir)
+    float node_t::get_linked_position_to_node(const node_t* node, bool is_in, bool is_horizontal_dir) const
     {
         auto& edges = is_in ? in_edges : out_edges;
         float median_position = 0.0f;
@@ -694,7 +738,7 @@ namespace graph_layout
         {
             auto pin = is_in ? Edge->head : Edge->tail;
             auto pin_to_check = is_in ? Edge->tail : Edge->head;
-            if (pin_to_check->owner == Node)
+            if (pin_to_check->owner == node)
             {
                 if (is_horizontal_dir)
                 {
@@ -851,7 +895,6 @@ namespace graph_layout
                     }
                     pin_t* dummy_pin_in = n->add_pin(pin_type_t::in);
                     edge_t* dummy_edge = add_edge(dummy_pin_out, dummy_pin_in);
-                    //dummy_edge->min_length = 0;
                 }
             }
             break;
@@ -868,7 +911,6 @@ namespace graph_layout
                     }
                     pin_t* dummy_pin_out = n->add_pin(pin_type_t::out);
                     edge_t* dummy_edge = add_edge(dummy_pin_out, dummy_pin_in);
-                    //dummy_edge->min_length = 0;
                 }
             }
             break;
@@ -944,15 +986,7 @@ namespace graph_layout
         for (auto [fst, edge] : edges)
         {
             pair p = make_pair(edge->tail->owner, edge->head->owner);
-            auto it = tail_to_head_edges_map.find(p);
-            if (it != tail_to_head_edges_map.end())
-            {
-                it->second.push_back(edge);
-            }
-            else
-            {
-                tail_to_head_edges_map.insert(make_pair(p, vector{edge}));
-            }
+            tail_to_head_edges_map[p].push_back(edge);
         }
         for (auto [k, v] : tail_to_head_edges_map)
         {
@@ -1093,7 +1127,7 @@ namespace graph_layout
         delete tree;
     }
 
-    void graph_t::rank()
+    void graph_t::rank() const
     {
         tree_t tree = feasible_tree();
         tree.calculate_cut_values();
@@ -1105,7 +1139,7 @@ namespace graph_layout
         normalize();
     }
 
-    void graph_t::add_dummy_nodes(tree_t& feasible_tree)
+    void graph_t::add_dummy_nodes(tree_t* feasible_tree)
     {
         vector<edge_t*> edges_vec;
         transform(edges.begin(), edges.end(), back_inserter(edges_vec), [](auto& p) { return p.second; });
@@ -1114,24 +1148,25 @@ namespace graph_layout
             int edge_len = edge->length();
             if (edge_len > 1)
             {
-                bool is_tree_edge = feasible_tree.tree_edges.find(edge) != feasible_tree.tree_edges.end();
+                bool is_tree_edge = feasible_tree && feasible_tree->tree_edges.find(edge) != feasible_tree->tree_edges.end();
                 pin_t* tail = edge->tail;
                 for (int i = 0; i < edge_len - 1; i++)
                 {
                     node_t* dummy = add_node("dummy");
-                    if (is_tree_edge) feasible_tree.nodes.insert(dummy);
+                    dummy->is_dummy_node = true;
+                    if (is_tree_edge) feasible_tree->nodes.insert(dummy);
                     dummy->rank = edge->tail->owner->rank + i + 1;
                     pin_t* dummy_in = dummy->add_pin(pin_type_t::in);
                     pin_t* dummy_out = dummy->add_pin(pin_type_t::out);
                     edge_t* dummy_edge = add_edge(tail, dummy_in);
-                    if (is_tree_edge) feasible_tree.tree_edges.insert(dummy_edge);
+                    if (is_tree_edge) feasible_tree->tree_edges.insert(dummy_edge);
                     tail = dummy_out;
                 }
                 edge_t* dummy_edge = add_edge(tail, edge->head);
                 if (is_tree_edge)
                 {
-                    feasible_tree.tree_edges.insert(dummy_edge);
-                    feasible_tree.tree_edges.erase(edge);
+                    feasible_tree->tree_edges.insert(dummy_edge);
+                    feasible_tree->tree_edges.erase(edge);
                 }
                 remove_edge(edge);
             }
@@ -1141,38 +1176,9 @@ namespace graph_layout
     void graph_t::assign_layers()
     {
         map<int, vector<node_t*>> rank_layer_map;
-        queue<node_t*> queue;
-        set<node_t*> visited;
         for (auto n : nodes)
         {
-            if (n->rank == 0)
-            {
-                queue.push(n);
-                visited.insert(n);
-            }
-        }
-        while (!queue.empty())
-        {
-            node_t* node = queue.front();
-            queue.pop();
-            auto it = rank_layer_map.find(node->rank);
-            if (it != rank_layer_map.end())
-            {
-                it->second.push_back(node);
-            }
-            else
-            {
-                rank_layer_map.insert(make_pair(node->rank, vector{node}));
-            }
-            auto out_nodes = node->get_out_nodes();
-            for (auto n : out_nodes)
-            {
-                if (visited.find(n) == visited.end())
-                {
-                    visited.insert(n);
-                    queue.push(n);
-                }
-            }
+            rank_layer_map[n->rank].push_back(n);
         }
         layers.resize(rank_layer_map.size());
         for (auto [rank, layer] : rank_layer_map)
@@ -1189,7 +1195,7 @@ namespace graph_layout
         for (size_t i = 0; i < max_iterations; i++)
         {
             sort_layers(order, i % 2 == 0);
-            const size_t new_crossing = crossing(order, false);
+            const size_t new_crossing = crossing(order, true);
             if (new_crossing < best_crossing)
             {
                 best = order;
@@ -1199,11 +1205,11 @@ namespace graph_layout
         layers = best;
     }
 
-    void graph_t::assign_x_coordinate()
+    rect_t graph_t::assign_coordinate()
     {
         auto layers_bound = get_layers_bound();
-        node_t* first_node = layers[0][0];
-        auto old_position = first_node->position;
+        fas_positioning_strategy_t positioning_strategy{layers, !is_vertical_layout, layers_bound};
+        return positioning_strategy.assign_coordinate();
     }
 
     std::vector<rect_t> graph_t::get_layers_bound() const
@@ -1224,7 +1230,7 @@ namespace graph_layout
         return layers_bound;
     }
 
-    void graph_t::sort_layers(std::vector<std::vector<node_t*>> layer_vec, bool is_down)
+    void graph_t::sort_layers(std::vector<std::vector<node_t*>>& layer_vec, bool is_down) const
     {
         int max_rank = static_cast<int>(layer_vec.size());
         if (max_rank < 2)
@@ -1255,7 +1261,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::calculate_pins_index_in_layer(std::vector<node_t*>& layer) const
+    void graph_t::calculate_pins_index_in_layer(const std::vector<node_t*>& layer)
     {
         if (layer.empty())
         {
@@ -1266,7 +1272,7 @@ namespace graph_layout
         int end = static_cast<int>(layer.size());
         for (int i = 0; i != end; i++)
         {
-            for (int j = 0; j < layer[i]->in_pins.size(); i++)
+            for (int j = 0; j < layer[i]->in_pins.size(); j++)
             {
                 auto pin = layer[i]->in_pins[j];
                 pin->index_in_layer = in_pin_start_index + j;
@@ -1281,18 +1287,22 @@ namespace graph_layout
         }
     }
 
-    std::vector<edge_t*> graph_t::get_edges_between_two_layers(std::vector<node_t*> lower, std::vector<node_t*> upper, const node_t* excluded_node)
+    std::vector<edge_t*> graph_t::get_edges_between_two_layers(const vector<node_t*>& lower, const vector<node_t*>& upper, const node_t* excluded_node)
     {
         vector<edge_t*> result;
         for (auto n : lower)
         {
-            auto layer_edges = n->get_edges_linked_to_layer(upper, false);
+            if(excluded_node == n)
+            {
+                continue;
+            }
+            auto layer_edges = n->get_edges_linked_to_layer(upper, true);
             result.insert(result.end(), layer_edges.begin(), layer_edges.end());
         }
         return result;
     }
 
-    size_t graph_t::crossing(std::vector<std::vector<node_t*>>& order, bool calculate_pins_index) const
+    size_t graph_t::crossing(const vector<vector<node_t*>>& order, bool calculate_pins_index)
     {
         size_t crossing_value = 0;
         if (calculate_pins_index)
@@ -1323,7 +1333,7 @@ namespace graph_layout
         return crossing_value;
     }
 
-    tree_t graph_t::feasible_tree()
+    tree_t graph_t::feasible_tree() const
     {
         init_rank();
         for (;;)
@@ -1347,7 +1357,7 @@ namespace graph_layout
         }
     }
 
-    std::string graph_t::generate_test_code()
+    string graph_t::generate_test_code()
     {
         stringstream ss;
         ss << "graph_t g;" << std::endl;
@@ -1404,7 +1414,7 @@ namespace graph_layout
         return ss.str();
     }
 
-    void graph_t::init_rank()
+    void graph_t::init_rank() const
     {
         set<edge_t*> scanned_set;
         int ranking = 0;
@@ -1427,7 +1437,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::normalize()
+    void graph_t::normalize() const
     {
         int min_rank = std::numeric_limits<int>::max();
         for (auto n : nodes)
@@ -1825,21 +1835,12 @@ namespace graph_layout
         g.add_edge(pin_K2Node_CallFunction_13_out3, pin_K2Node_CallFunction_16_in0);
         g.add_edge(pin_K2Node_CallFunction_14_out3, pin_K2Node_CallFunction_18_in0);
 
-        map<node_t*, node_t*> nodes_map;
-        map<pin_t*, pin_t*> pins_map;
-        map<edge_t*, edge_t*> edges_map;
-        map<node_t*, node_t*> nodes_map_inv;
-        map<pin_t*, pin_t*> pins_map_inv;
-        map<edge_t*, edge_t*> edges_map_inv;
-        graph_t* cloned = g.clone(nodes_map, pins_map, edges_map, nodes_map_inv, pins_map_inv, edges_map_inv);
-        cloned->set_node_in_rank_slot(nodes_map_inv[node_K2Node_AddComponent_4], rank_slot_t::min);
-        cloned->merge_edges();
-        cloned->acyclic();
-        cloned->rank();
-        for (auto n : cloned->nodes)
-        {
-            nodes_map[n]->rank = n->rank;
-        }
-        delete cloned;
+        g.set_node_in_rank_slot(node_K2Node_AddComponent_4, rank_slot_t::min);
+        g.acyclic();
+        g.rank();
+        g.add_dummy_nodes(nullptr);
+        g.assign_layers();
+        g.ordering();
+        g.assign_coordinate();
     }
 }
