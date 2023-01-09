@@ -17,8 +17,6 @@ class FFormatterNode;
 class UEdGraphNode;
 class UEdGraphNode_Comment;
 
-DECLARE_DELEGATE_RetVal_OneParam(FVector2D, FSizeCalculator, UEdGraphNode*);
-
 class FFormatterPin
 {
 public:
@@ -127,10 +125,6 @@ public:
     static TSet<UEdGraphNode*> GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
     static TSet<UEdGraphNode*> GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
     static bool GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EInOutOption Option, bool bInvert = false);
-
-    void CalculateNodesSize();
-    void CalculatePinsOffset();
-
     const TArray<FFormatterNode*>& GetAllNodes() const;
 
 private:

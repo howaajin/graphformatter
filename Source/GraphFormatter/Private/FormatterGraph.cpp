@@ -33,7 +33,7 @@ FFormatterNode::FFormatterNode(UEdGraphNode* InNode)
     : Guid(InNode->NodeGuid)
     , OriginalNode(InNode)
     , SubGraph(nullptr)
-    , Size(FVector2D())
+    , Size(FFormatter::Instance().GetNodeSize(InNode))
     , PathDepth(0)
     , Position(FVector2D(InNode->NodePosX, InNode->NodePosY))
 {
@@ -44,6 +44,7 @@ FFormatterNode::FFormatterNode(UEdGraphNode* InNode)
         NewPin->OriginalPin = Pin;
         NewPin->Direction = Pin->Direction;
         NewPin->OwningNode = this;
+        NewPin->NodeOffset = FFormatter::Instance().GetPinOffset(Pin);
         if (Pin->Direction == EGPD_Input)
         {
             InPins.Add(NewPin);
@@ -1545,63 +1546,6 @@ FSlateRect FFormatterGraph::GetBorder() const
     return Border;
 }
 
-void FFormatterGraph::CalculateNodesSize()
-{
-    if (IsolatedGraphs.Num() > 1)
-    {
-        for (auto IsolatedGraph : IsolatedGraphs)
-        {
-            IsolatedGraph->CalculateNodesSize();
-        }
-    }
-    else
-    {
-        for (auto Node : Nodes)
-        {
-            if (Node->OriginalNode != nullptr)
-            {
-                if (SubGraphs.Contains(Node->Guid))
-                {
-                    SubGraphs[Node->Guid]->CalculateNodesSize();
-                }
-                Node->Size = FFormatter::Instance().GetNodeSize(Node->OriginalNode);
-            }
-        }
-    }
-}
-
-void FFormatterGraph::CalculatePinsOffset()
-{
-    if (IsolatedGraphs.Num() > 1)
-    {
-        for (auto IsolatedGraph : IsolatedGraphs)
-        {
-            IsolatedGraph->CalculatePinsOffset();
-        }
-    }
-    else
-    {
-        for (auto Node : Nodes)
-        {
-            if (Node->OriginalNode != nullptr)
-            {
-                if (SubGraphs.Contains(Node->Guid))
-                {
-                    SubGraphs[Node->Guid]->CalculatePinsOffset();
-                }
-                for (auto Pin : Node->InPins)
-                {
-                    Pin->NodeOffset = FFormatter::Instance().GetPinOffset(Pin->OriginalPin);
-                }
-                for (auto Pin : Node->OutPins)
-                {
-                    Pin->NodeOffset = FFormatter::Instance().GetPinOffset(Pin->OriginalPin);
-                }
-            }
-        }
-    }
-}
-
 const TArray<FFormatterNode*>& FFormatterGraph::GetAllNodes() const
 {
     return Nodes;
@@ -1610,8 +1554,6 @@ const TArray<FFormatterNode*>& FFormatterGraph::GetAllNodes() const
 void FFormatterGraph::Format()
 {
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    CalculateNodesSize();
-    CalculatePinsOffset();
     if (IsolatedGraphs.Num() > 1)
     {
         FSlateRect PreBound;
@@ -1640,10 +1582,9 @@ void FFormatterGraph::Format()
     }
     else
     {
-        for (auto SubGraphPair : SubGraphs)
+        for (auto [Key, SubGraph] : SubGraphs)
         {
-            auto SubGraph = SubGraphPair.Value;
-            auto Node = NodesMap[SubGraphPair.Key];
+            auto Node = NodesMap[Key];
             SubGraph->Format();
             auto SubGraphBorder = SubGraph->GetBorder();
             Node->UpdatePinsOffset(FVector2D(SubGraphBorder.Left, SubGraphBorder.Top));
