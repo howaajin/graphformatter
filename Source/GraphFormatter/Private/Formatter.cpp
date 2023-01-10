@@ -345,7 +345,7 @@ static bool IsNodeUnderRect(const TSharedRef<SGraphNode> InNodeWidget, const FSl
     const FVector2D InNodeSize = InNodeWidget->GetDesiredSize();
 
     const FSlateRect NodeGeometryGraphSpace(InNodePosition.X, InNodePosition.Y, InNodePosition.X + InNodeSize.X, InNodePosition.Y + InNodeSize.Y);
-    return FSlateRect::IsRectangleContained(CommentRect, NodeGeometryGraphSpace);
+    return CommentRect.ContainsPoint(NodeGeometryGraphSpace.GetCenter()) && CommentRect.GetSize() > InNodeSize;
 }
 
 TSet<UEdGraphNode*> FFormatter::GetNodesUnderComment(const UEdGraphNode_Comment* CommentNode) const
