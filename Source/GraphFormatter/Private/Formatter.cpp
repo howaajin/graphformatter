@@ -424,7 +424,7 @@ void FFormatter::Format()
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
     SelectedNodes = DoSelectionStrategy(CurrentGraph, SelectedNodes);
-    auto Graph = FFormatterGraph::BuildIsolated(SelectedNodes);
+    auto Graph = FFormatterGraph::Build(SelectedNodes);
     Graph->Format();
     auto BoundMap = Graph->GetBoundMap();
     delete Graph;

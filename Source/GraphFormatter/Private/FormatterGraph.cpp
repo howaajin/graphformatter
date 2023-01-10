@@ -784,7 +784,7 @@ FFormatterNode* FConnectedGraph::FindMaxDegreeDiffNode() const
     return Result;
 }
 
-FFormatterGraph* FFormatterGraph::BuildIsolated(TSet<UEdGraphNode*> SelectedNodes)
+FFormatterGraph* FFormatterGraph::Build(TSet<UEdGraphNode*> SelectedNodes)
 {
     auto Graph = new FFormatterGraph(true);
     Graph->BuildNodesAndEdges(SelectedNodes);
@@ -1067,7 +1067,7 @@ FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, 
     FFormatterNode* Node = new FFormatterNode(CommentNode);
     if (NodesUnderComment.Num() > 0)
     {
-        auto SubGraph = BuildIsolated(NodesUnderComment);
+        auto SubGraph = Build(NodesUnderComment);
         float BorderHeight = FFormatter::Instance().GetCommentNodeTitleHeight(CommentNode);
         const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
         SubGraph->SetBorder(Settings.CommentBorder, BorderHeight + Settings.CommentBorder, Settings.CommentBorder, Settings.CommentBorder);

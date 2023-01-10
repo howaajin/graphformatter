@@ -93,7 +93,7 @@ private:
 class FFormatterGraph
 {
 public:
-    static FFormatterGraph* BuildIsolated(TSet<UEdGraphNode*> Nodes);
+    static FFormatterGraph* Build(TSet<UEdGraphNode*> Nodes);
     static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true, bool IsParameterGroup = false);
     static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
     static FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment);
