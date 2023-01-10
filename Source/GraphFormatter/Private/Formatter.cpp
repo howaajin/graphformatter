@@ -424,22 +424,23 @@ void FFormatter::Format()
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
     SelectedNodes = DoSelectionStrategy(CurrentGraph, SelectedNodes);
-    FFormatterGraph FormatterGraph(SelectedNodes);
-    FormatterGraph.Format();
-    auto BoundMap = FormatterGraph.GetBoundMap();
+    auto Graph = FFormatterGraph::BuildIsolated(SelectedNodes);
+    Graph->Format();
+    auto BoundMap = Graph->GetBoundMap();
+    delete Graph;
     const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
-    for (auto NodeRectPair : BoundMap)
+    for (auto [Node, Rect] : BoundMap)
     {
-        auto WidgetNode = GetWidget(NodeRectPair.Key);
+        auto WidgetNode = GetWidget(Node);
         SGraphPanel::SNode::FNodeSet Filter;
-        WidgetNode->MoveTo(NodeRectPair.Value.GetTopLeft(), Filter, true);
-        if (NodeRectPair.Key->IsA(UEdGraphNode_Comment::StaticClass()))
+        WidgetNode->MoveTo(Rect.GetTopLeft(), Filter, true);
+        if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
         {
-            auto CommentNode = Cast<UEdGraphNode_Comment>(NodeRectPair.Key);
-            CommentNode->SetBounds(NodeRectPair.Value);
+            auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
+            CommentNode->SetBounds(Rect);
             if (auto NodeResizable = StaticCast<SGraphNodeResizable*>(WidgetNode))
             {
-                NodeResizable->*FPrivateAccessor<FAccess_SGraphNodeResizable_UserSize>::Member = NodeRectPair.Value.GetSize();
+                NodeResizable->*FPrivateAccessor<FAccess_SGraphNodeResizable_UserSize>::Member = Rect.GetSize();
             }
         }
     }
