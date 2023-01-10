@@ -192,7 +192,7 @@ private:
     void DoPositioning();
     FFormatterNode* FindSourceNode() const;
     FFormatterNode* FindSinkNode() const;
-    FFormatterNode* FindMaxDegreeDiffNode() const;
+    FFormatterNode* FindMaxInOutWeightDiffNode() const;
     TArray<FFormatterNode*> GetLeavesWithPathDepth0() const;
     int32 AssignPathDepthForNodes() const;
 

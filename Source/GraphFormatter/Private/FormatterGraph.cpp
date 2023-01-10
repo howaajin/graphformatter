@@ -721,7 +721,7 @@ void FConnectedGraph::RemoveCycle()
     {
         ClonedGraph->RemoveNode(SinkNode);
     }
-    while (auto MedianNode = ClonedGraph->FindMaxDegreeDiffNode())
+    while (auto MedianNode = ClonedGraph->FindMaxInOutWeightDiffNode())
     {
         for (auto Edge : MedianNode->InEdges)
         {
@@ -759,7 +759,7 @@ FFormatterNode* FConnectedGraph::FindSinkNode() const
     return nullptr;
 }
 
-FFormatterNode* FConnectedGraph::FindMaxDegreeDiffNode() const
+FFormatterNode* FConnectedGraph::FindMaxInOutWeightDiffNode() const
 {
     auto EdgesWeightSum = [](TArray<FFormatterEdge*> Edges)
     {
@@ -771,13 +771,13 @@ FFormatterNode* FConnectedGraph::FindMaxDegreeDiffNode() const
         return Sum;
     };
     FFormatterNode* Result = nullptr;
-    int32 MaxDegreeDiff = -INT32_MAX;
+    int32 MaxWeight = -INT32_MAX;
     for (auto Node : Nodes)
     {
-        const int32 DegreeDiff = EdgesWeightSum(Node->OutEdges) - EdgesWeightSum(Node->InEdges);
-        if (DegreeDiff > MaxDegreeDiff)
+        const int32 Diff = EdgesWeightSum(Node->OutEdges) - EdgesWeightSum(Node->InEdges);
+        if (Diff > MaxWeight)
         {
-            MaxDegreeDiff = DegreeDiff;
+            MaxWeight = Diff;
             Result = Node;
         }
     }
