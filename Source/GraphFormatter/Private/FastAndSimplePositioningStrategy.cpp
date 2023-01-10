@@ -375,7 +375,7 @@ void FFastAndSimplePositioningStrategy::Combine()
     {
         for (auto Node : Layer)
         {
-            TArray<float> Values = {Layouts[0][Node], Layouts[1][Node], Layouts[2][Node], Layouts[3][Node]};
+            TArray Values = {Layouts[0][Node], Layouts[1][Node], Layouts[2][Node], Layouts[3][Node]};
             Values.Sort();
             if (!IsHorizontalDirection)
             {
@@ -385,11 +385,11 @@ void FFastAndSimplePositioningStrategy::Combine()
             {
                 if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
                 {
-                    CombinedPositionMap.Add(Node, (Values[1] + Values[2]) / 2.0f);
+                    CombinedPositionMap.Add(Node, Values[MinWidthIndex]);
                 }
                 else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
                 {
-                    CombinedPositionMap.Add(Node, (Values[0] + Values[3]) / 2.0f);
+                    CombinedPositionMap.Add(Node, (Values[2] + Values[3]) / 2.0f);
                 }
             }
         }
