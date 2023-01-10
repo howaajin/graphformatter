@@ -1181,11 +1181,11 @@ FDisconnectedGraph::~FDisconnectedGraph()
 TMap<UEdGraphPin*, FVector2D> FDisconnectedGraph::GetPinsOffset()
 {
     TMap<UEdGraphPin*, FVector2D> Result;
-    for (auto IsolatedGraph : ConnectedGraphs)
+    for (auto Graph : ConnectedGraphs)
     {
-        auto SubBound = IsolatedGraph->GetTotalBound();
+        auto SubBound = Graph->GetTotalBound();
         auto Offset = SubBound.GetTopLeft() - GetTotalBound().GetTopLeft();
-        auto SubOffsets = IsolatedGraph->GetPinsOffset();
+        auto SubOffsets = Graph->GetPinsOffset();
         for (auto& SubOffsetPair : SubOffsets)
         {
             SubOffsetPair.Value = SubOffsetPair.Value + Offset;
@@ -1198,9 +1198,9 @@ TMap<UEdGraphPin*, FVector2D> FDisconnectedGraph::GetPinsOffset()
 TArray<FFormatterPin*> FDisconnectedGraph::GetInputPins() const
 {
     TSet<FFormatterPin*> Result;
-    for (auto IsolatedGraph : ConnectedGraphs)
+    for (auto Graph : ConnectedGraphs)
     {
-        Result.Append(IsolatedGraph->GetInputPins());
+        Result.Append(Graph->GetInputPins());
     }
     return Result.Array();
 }
@@ -1208,9 +1208,9 @@ TArray<FFormatterPin*> FDisconnectedGraph::GetInputPins() const
 TArray<FFormatterPin*> FDisconnectedGraph::GetOutputPins() const
 {
     TSet<FFormatterPin*> Result;
-    for (auto IsolatedGraph : ConnectedGraphs)
+    for (auto Graph : ConnectedGraphs)
     {
-        Result.Append(IsolatedGraph->GetOutputPins());
+        Result.Append(Graph->GetOutputPins());
     }
     return Result.Array();
 }
@@ -1218,9 +1218,9 @@ TArray<FFormatterPin*> FDisconnectedGraph::GetOutputPins() const
 TSet<UEdGraphNode*> FDisconnectedGraph::GetOriginalNodes() const
 {
     TSet<UEdGraphNode*> Result;
-    for (auto IsolatedGraph : ConnectedGraphs)
+    for (auto Graph : ConnectedGraphs)
     {
-        Result.Append(IsolatedGraph->GetOriginalNodes());
+        Result.Append(Graph->GetOriginalNodes());
     }
     return Result;
 }
@@ -1255,9 +1255,9 @@ void FDisconnectedGraph::Format()
 
 void FDisconnectedGraph::OffsetBy(const FVector2D& InOffset)
 {
-    for (auto isolatedGraph : ConnectedGraphs)
+    for (auto Graph : ConnectedGraphs)
     {
-        isolatedGraph->OffsetBy(InOffset);
+        Graph->OffsetBy(InOffset);
     }
 }
 
