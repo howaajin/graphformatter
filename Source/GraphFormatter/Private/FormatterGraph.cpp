@@ -1167,12 +1167,12 @@ FFormatterGraph* FFormatterGraph::Clone()
 
 void FDisconnectedGraph::AddGraph(FFormatterGraph* Graph)
 {
-    IsolatedGraphs.Push(Graph);
+    ConnectedGraphs.Push(Graph);
 }
 
 FDisconnectedGraph::~FDisconnectedGraph()
 {
-    for (auto Graph : IsolatedGraphs)
+    for (auto Graph : ConnectedGraphs)
     {
         delete Graph;
     }
@@ -1181,7 +1181,7 @@ FDisconnectedGraph::~FDisconnectedGraph()
 TMap<UEdGraphPin*, FVector2D> FDisconnectedGraph::GetPinsOffset()
 {
     TMap<UEdGraphPin*, FVector2D> Result;
-    for (auto IsolatedGraph : IsolatedGraphs)
+    for (auto IsolatedGraph : ConnectedGraphs)
     {
         auto SubBound = IsolatedGraph->GetTotalBound();
         auto Offset = SubBound.GetTopLeft() - GetTotalBound().GetTopLeft();
@@ -1198,7 +1198,7 @@ TMap<UEdGraphPin*, FVector2D> FDisconnectedGraph::GetPinsOffset()
 TArray<FFormatterPin*> FDisconnectedGraph::GetInputPins() const
 {
     TSet<FFormatterPin*> Result;
-    for (auto IsolatedGraph : IsolatedGraphs)
+    for (auto IsolatedGraph : ConnectedGraphs)
     {
         Result.Append(IsolatedGraph->GetInputPins());
     }
@@ -1208,7 +1208,7 @@ TArray<FFormatterPin*> FDisconnectedGraph::GetInputPins() const
 TArray<FFormatterPin*> FDisconnectedGraph::GetOutputPins() const
 {
     TSet<FFormatterPin*> Result;
-    for (auto IsolatedGraph : IsolatedGraphs)
+    for (auto IsolatedGraph : ConnectedGraphs)
     {
         Result.Append(IsolatedGraph->GetOutputPins());
     }
@@ -1218,7 +1218,7 @@ TArray<FFormatterPin*> FDisconnectedGraph::GetOutputPins() const
 TSet<UEdGraphNode*> FDisconnectedGraph::GetOriginalNodes() const
 {
     TSet<UEdGraphNode*> Result;
-    for (auto IsolatedGraph : IsolatedGraphs)
+    for (auto IsolatedGraph : ConnectedGraphs)
     {
         Result.Append(IsolatedGraph->GetOriginalNodes());
     }
@@ -1229,16 +1229,16 @@ void FDisconnectedGraph::Format()
 {
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
     FSlateRect PreBound;
-    for (auto isolatedGraph : IsolatedGraphs)
+    for (auto Graph : ConnectedGraphs)
     {
-        isolatedGraph->Format();
+        Graph->Format();
 
         if (PreBound.IsValid())
         {
             FVector2D StartCorner = FFormatter::Instance().IsVerticalLayout ? PreBound.GetTopRight() : PreBound.GetBottomLeft();
-            isolatedGraph->SetPosition(StartCorner);
+            Graph->SetPosition(StartCorner);
         }
-        auto Bound = isolatedGraph->GetTotalBound();
+        auto Bound = Graph->GetTotalBound();
         if (TotalBound.IsValid())
         {
             TotalBound = TotalBound.Expand(Bound);
@@ -1255,7 +1255,7 @@ void FDisconnectedGraph::Format()
 
 void FDisconnectedGraph::OffsetBy(const FVector2D& InOffset)
 {
-    for (auto isolatedGraph : IsolatedGraphs)
+    for (auto isolatedGraph : ConnectedGraphs)
     {
         isolatedGraph->OffsetBy(InOffset);
     }
@@ -1264,7 +1264,7 @@ void FDisconnectedGraph::OffsetBy(const FVector2D& InOffset)
 TMap<UEdGraphNode*, FSlateRect> FDisconnectedGraph::GetBoundMap()
 {
     TMap<UEdGraphNode*, FSlateRect> Result;
-    for (auto Graph : IsolatedGraphs)
+    for (auto Graph : ConnectedGraphs)
     {
         Result.Append(Graph->GetBoundMap());
     }

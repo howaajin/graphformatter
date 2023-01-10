@@ -145,7 +145,7 @@ protected:
 
 class FDisconnectedGraph : public FFormatterGraph
 {
-    TArray<FFormatterGraph*> IsolatedGraphs;
+    TArray<FFormatterGraph*> ConnectedGraphs;
 public:
     void AddGraph(FFormatterGraph* Graph);
     virtual ~FDisconnectedGraph() override;
