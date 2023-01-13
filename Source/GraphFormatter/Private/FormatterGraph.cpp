@@ -1363,7 +1363,7 @@ static bool BehaviorTreeNodeComparer(const FFormatterNode& A, const FFormatterNo
 
 TArray<TArray<FFormatterNode*>> GetLayeredListFromNewGraph(const FConnectedGraph* Graph)
 {
-    graph_layout::graph_t g;
+    graph_layout::connected_graph_t g;
     auto Nodes = Graph->GetAllNodes();
     TMap<FFormatterPin*, graph_layout::pin_t*> PinsMap;
     TMap<graph_layout::node_t*, FFormatterNode*> NodesMap;

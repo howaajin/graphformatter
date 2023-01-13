@@ -592,7 +592,7 @@ namespace graph_layout
     bool node_t::is_crossing_inner_segment(const vector<node_t*>& lower_layer, const vector<node_t*>& upper_layer) const
     {
         auto edges_linked_to_upper = get_edges_linked_to_layer(upper_layer, true);
-        auto edges_between_layers = graph_t::get_edges_between_two_layers(lower_layer, upper_layer, this);
+        auto edges_between_layers = connected_graph_t::get_edges_between_two_layers(lower_layer, upper_layer, this);
         for (auto edge_linked_to_upper : edges_linked_to_upper)
         {
             for (auto edge_between_layers : edges_between_layers)
@@ -758,6 +758,52 @@ namespace graph_layout
         return median_position / count;
     }
 
+    void node_t::update_pins_offset()
+    {
+        if (graph)
+        {
+            auto pins_offset = graph->get_pins_offset();
+            for (auto pin : in_pins)
+            {
+                auto it = pins_offset.find(pin->copy_from);
+                if (it != pins_offset.end())
+                {
+                    auto border = vector2_t{graph->border.l, graph->border.t};
+                    pin->offset = it->second + border;
+                }
+            }
+            for (auto pin : out_pins)
+            {
+                auto it = pins_offset.find(pin->copy_from);
+                if (it != pins_offset.end())
+                {
+                    auto border = vector2_t{graph->border.l, graph->border.t};
+                    pin->offset = it->second + border;
+                }
+            }
+            auto comparer = [](const pin_t* a, const pin_t* b)
+            {
+                return a->offset.y < b->offset.y;
+            };
+            sort(in_pins.begin(), in_pins.end(), comparer);
+            sort(out_pins.begin(), out_pins.end(), comparer);
+        }
+    }
+
+    void node_t::set_sub_graph(connected_graph_t* g)
+    {
+        graph = g;
+        if (graph)
+        {
+            auto pins = graph->get_pins();
+            for (auto p : pins)
+            {
+                pin_t* pin = add_pin(p->type);
+                pin->copy_from = p;
+            }
+        }
+    }
+
     node_t::~node_t()
     {
         for (auto pin : in_pins)
@@ -799,7 +845,7 @@ namespace graph_layout
         return new_node;
     }
 
-    graph_t* graph_t::clone() const
+    connected_graph_t* connected_graph_t::clone() const
     {
         map<node_t*, node_t*> nodes_map;
         map<pin_t*, pin_t*> pins_map;
@@ -810,10 +856,10 @@ namespace graph_layout
         return clone(nodes_map, pins_map, edges_map, nodes_map_inv, pins_map_inv, edges_map_inv);
     }
 
-    graph_t* graph_t::clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
+    connected_graph_t* connected_graph_t::clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
                             std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const
     {
-        auto cloned = new graph_t;
+        auto cloned = new connected_graph_t;
         cloned->bound = bound;
         for (auto n : nodes)
         {
@@ -847,19 +893,7 @@ namespace graph_layout
         return cloned;
     }
 
-    graph_t::~graph_t()
-    {
-        for (auto [k, edge] : edges)
-        {
-            delete edge;
-        }
-        for (auto n : nodes)
-        {
-            delete n;
-        }
-    }
-
-    node_t* graph_t::add_node(graph_t* sub_graph)
+    node_t* connected_graph_t::add_node(connected_graph_t* sub_graph)
     {
         auto node = new node_t();
         node->graph = sub_graph;
@@ -871,14 +905,14 @@ namespace graph_layout
         return node;
     }
 
-    node_t* graph_t::add_node(const string& name, graph_t* sub_graph)
+    node_t* connected_graph_t::add_node(const string& name, connected_graph_t* sub_graph)
     {
         auto node = add_node(sub_graph);
         node->name = name;
         return node;
     }
 
-    void graph_t::set_node_in_rank_slot(node_t* node, rank_slot_t rank_slot)
+    void connected_graph_t::set_node_in_rank_slot(node_t* node, rank_slot_t rank_slot)
     {
         switch (rank_slot)
         {
@@ -917,7 +951,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::remove_node(node_t* node)
+    void connected_graph_t::remove_node(node_t* node)
     {
         if (node->graph)
         {
@@ -926,7 +960,7 @@ namespace graph_layout
         delete node;
     }
 
-    edge_t* graph_t::add_edge(pin_t* tail, pin_t* head)
+    edge_t* connected_graph_t::add_edge(pin_t* tail, pin_t* head)
     {
         auto k = make_pair(tail, head);
         auto it = edges.find(k);
@@ -941,7 +975,7 @@ namespace graph_layout
         return edge;
     }
 
-    void graph_t::remove_edge(const edge_t* edge)
+    void connected_graph_t::remove_edge(const edge_t* edge)
     {
         auto key = make_pair(edge->tail, edge->head);
         edges.erase(key);
@@ -952,7 +986,7 @@ namespace graph_layout
         delete edge;
     }
 
-    void graph_t::remove_edge(pin_t* tail, pin_t* head)
+    void connected_graph_t::remove_edge(pin_t* tail, pin_t* head)
     {
         auto key = make_pair(tail, head);
         auto it = edges.find(key);
@@ -962,7 +996,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::invert_edge(edge_t* edge) const
+    void connected_graph_t::invert_edge(edge_t* edge) const
     {
         pin_t* tail = edge->tail;
         pin_t* head = edge->head;
@@ -980,7 +1014,7 @@ namespace graph_layout
         edge->is_inverted = true;
     }
 
-    void graph_t::merge_edges()
+    void connected_graph_t::merge_edges()
     {
         map<pair<node_t*, node_t*>, vector<edge_t*>> tail_to_head_edges_map;
         for (auto [fst, edge] : edges)
@@ -1002,7 +1036,7 @@ namespace graph_layout
         }
     }
 
-    vector<pin_t*> graph_t::get_pins() const
+    vector<pin_t*> connected_graph_t::get_pins() const
     {
         vector<pin_t*> pins;
         for (auto n : nodes)
@@ -1014,7 +1048,7 @@ namespace graph_layout
         return pins;
     }
 
-    vector<node_t*> graph_t::get_source_nodes() const
+    vector<node_t*> connected_graph_t::get_source_nodes() const
     {
         vector<node_t*> source_nodes;
         for (auto n : nodes)
@@ -1027,7 +1061,7 @@ namespace graph_layout
         return source_nodes;
     }
 
-    vector<node_t*> graph_t::get_sink_nodes() const
+    vector<node_t*> connected_graph_t::get_sink_nodes() const
     {
         vector<node_t*> source_nodes;
         for (auto n : nodes)
@@ -1040,7 +1074,7 @@ namespace graph_layout
         return source_nodes;
     }
 
-    void graph_t::translate(vector2_t offset)
+    void connected_graph_t::translate(vector2_t offset)
     {
         for (auto n : nodes)
         {
@@ -1054,7 +1088,7 @@ namespace graph_layout
         translate(vector2_t{position.x - bound.l, position.y - bound.t});
     }
 
-    void graph_t::acyclic() const
+    void connected_graph_t::acyclic() const
     {
         if (nodes.empty())
         {
@@ -1068,7 +1102,7 @@ namespace graph_layout
         map<node_t*, node_t*> nodes_map_inv;
         map<pin_t*, pin_t*> pins_map_inv;
         map<edge_t*, edge_t*> edges_map_inv;
-        graph_t* tree = clone(nodes_map, pins_map, edges_map, nodes_map_inv, pins_map_inv, edges_map_inv);
+        connected_graph_t* tree = clone(nodes_map, pins_map, edges_map, nodes_map_inv, pins_map_inv, edges_map_inv);
         vector<node_t*> source_nodes = tree->get_source_nodes();
         if (!source_nodes.empty())
         {
@@ -1127,7 +1161,7 @@ namespace graph_layout
         delete tree;
     }
 
-    void graph_t::rank() const
+    void connected_graph_t::rank() const
     {
         tree_t tree = feasible_tree();
         tree.calculate_cut_values();
@@ -1139,7 +1173,7 @@ namespace graph_layout
         normalize();
     }
 
-    void graph_t::add_dummy_nodes(tree_t* feasible_tree)
+    void connected_graph_t::add_dummy_nodes(tree_t* feasible_tree)
     {
         vector<edge_t*> edges_vec;
         transform(edges.begin(), edges.end(), back_inserter(edges_vec), [](auto& p) { return p.second; });
@@ -1173,7 +1207,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::assign_layers()
+    void connected_graph_t::assign_layers()
     {
         map<int, vector<node_t*>> rank_layer_map;
         for (auto n : nodes)
@@ -1187,7 +1221,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::ordering()
+    void connected_graph_t::ordering()
     {
         auto order = layers;
         auto best = layers;
@@ -1205,14 +1239,54 @@ namespace graph_layout
         layers = best;
     }
 
-    rect_t graph_t::assign_coordinate()
+    void connected_graph_t::arrange()
+    {
+        for (auto [node, graph] : sub_graphs)
+        {
+            graph->arrange();
+            node->update_pins_offset();
+            auto sub_bound = graph->bound;
+            node->position = vector2_t{sub_bound.l, sub_bound.t} - vector2_t{graph->border.l, graph->border.t};
+            node->size = sub_bound.size() + graph->border.size() * 2;
+        }
+        if (!nodes.empty())
+        {
+            acyclic();
+            rank();
+            add_dummy_nodes(nullptr);
+            assign_layers();
+            ordering();
+            assign_coordinate();
+        }
+    }
+
+    void connected_graph_t::assign_coordinate()
     {
         auto layers_bound = get_layers_bound();
         fas_positioning_strategy_t positioning_strategy{layers, !is_vertical_layout, layers_bound};
-        return positioning_strategy.assign_coordinate();
+        positioning_strategy.assign_coordinate();
     }
 
-    std::vector<rect_t> graph_t::get_layers_bound() const
+    std::map<pin_t*, vector2_t> connected_graph_t::get_pins_offset()
+    {
+        map<pin_t*, vector2_t> result;
+        for(auto n:nodes)
+        {
+            for (auto pin : n->out_pins)
+            {
+                vector2_t offset = n->position + pin->offset - vector2_t{bound.t, bound.l};
+                result[pin] = offset;
+            }
+            for (auto pin : n->in_pins)
+            {
+                vector2_t offset = n->position + pin->offset - vector2_t{bound.t, bound.l};
+                result[pin] = offset;
+            }
+        }
+        return result;
+    }
+
+    std::vector<rect_t> connected_graph_t::get_layers_bound() const
     {
         vector<rect_t> layers_bound;
         rect_t total_bound{0, 0, -spacing.x, -spacing.y};
@@ -1230,7 +1304,7 @@ namespace graph_layout
         return layers_bound;
     }
 
-    void graph_t::sort_layers(std::vector<std::vector<node_t*>>& layer_vec, bool is_down) const
+    void connected_graph_t::sort_layers(std::vector<std::vector<node_t*>>& layer_vec, bool is_down) const
     {
         int max_rank = static_cast<int>(layer_vec.size());
         if (max_rank < 2)
@@ -1261,7 +1335,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::calculate_pins_index_in_layer(const std::vector<node_t*>& layer)
+    void connected_graph_t::calculate_pins_index_in_layer(const std::vector<node_t*>& layer)
     {
         if (layer.empty())
         {
@@ -1287,7 +1361,7 @@ namespace graph_layout
         }
     }
 
-    std::vector<edge_t*> graph_t::get_edges_between_two_layers(const vector<node_t*>& lower, const vector<node_t*>& upper, const node_t* excluded_node)
+    std::vector<edge_t*> connected_graph_t::get_edges_between_two_layers(const vector<node_t*>& lower, const vector<node_t*>& upper, const node_t* excluded_node)
     {
         vector<edge_t*> result;
         for (auto n : lower)
@@ -1302,7 +1376,7 @@ namespace graph_layout
         return result;
     }
 
-    size_t graph_t::crossing(const vector<vector<node_t*>>& order, bool calculate_pins_index)
+    size_t connected_graph_t::crossing(const vector<vector<node_t*>>& order, bool calculate_pins_index)
     {
         size_t crossing_value = 0;
         if (calculate_pins_index)
@@ -1333,7 +1407,7 @@ namespace graph_layout
         return crossing_value;
     }
 
-    tree_t graph_t::feasible_tree() const
+    tree_t connected_graph_t::feasible_tree() const
     {
         init_rank();
         for (;;)
@@ -1357,10 +1431,10 @@ namespace graph_layout
         }
     }
 
-    string graph_t::generate_test_code()
+    string connected_graph_t::generate_test_code()
     {
         stringstream ss;
-        ss << "graph_t g;" << std::endl;
+        ss << "connected_graph_t g;" << std::endl;
         for (auto n : nodes)
         {
             string node_name = n->name;
@@ -1414,7 +1488,7 @@ namespace graph_layout
         return ss.str();
     }
 
-    void graph_t::init_rank() const
+    void connected_graph_t::init_rank() const
     {
         set<edge_t*> scanned_set;
         int ranking = 0;
@@ -1437,7 +1511,7 @@ namespace graph_layout
         }
     }
 
-    void graph_t::normalize() const
+    void connected_graph_t::normalize() const
     {
         int min_rank = std::numeric_limits<int>::max();
         for (auto n : nodes)
@@ -1453,7 +1527,7 @@ namespace graph_layout
         }
     }
 
-    tree_t graph_t::tight_tree() const
+    tree_t connected_graph_t::tight_tree() const
     {
         tree_t tree;
         vector<node_t*> stack;
@@ -1728,6 +1802,22 @@ namespace graph_layout
         }
     }
 
+    void graph_t::translate(vector2_t offset)
+    {
+    }
+
+    graph_t::~graph_t()
+    {
+        for (auto [k, edge] : edges)
+        {
+            delete edge;
+        }
+        for (auto n : nodes)
+        {
+            delete n;
+        }
+    }
+
     void tree_t::update_non_tree_edges(const set<edge_t*>& all_edges)
     {
         non_tree_edges.clear();
@@ -1740,7 +1830,7 @@ namespace graph_layout
         }
     }
 
-    vector<node_t*> graph_t::get_nodes_without_unscanned_in_edges(const set<node_t*>& visited, const set<edge_t*>& scanned_set) const
+    vector<node_t*> connected_graph_t::get_nodes_without_unscanned_in_edges(const set<node_t*>& visited, const set<edge_t*>& scanned_set) const
     {
         vector<node_t*> result;
         for (auto n : nodes)
@@ -1766,9 +1856,9 @@ namespace graph_layout
         return result;
     }
 
-    void graph_t::test()
+    void connected_graph_t::test()
     {
-        graph_t g;
+        connected_graph_t g;
         auto node_K2Node_CallFunction_18 = g.add_node("K2Node_CallFunction_18");
         auto pin_K2Node_CallFunction_18_in0 = node_K2Node_CallFunction_18->add_pin(pin_type_t::in);
         auto pin_K2Node_CallFunction_18_in1 = node_K2Node_CallFunction_18->add_pin(pin_type_t::in);
@@ -1841,6 +1931,5 @@ namespace graph_layout
         g.add_dummy_nodes(nullptr);
         g.assign_layers();
         g.ordering();
-        g.assign_coordinate();
     }
 }

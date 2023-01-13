@@ -15,7 +15,7 @@
 
 namespace graph_layout
 {
-    struct graph_t;
+    struct connected_graph_t;
     struct node_t;
     struct vector2_t;
 
@@ -31,12 +31,16 @@ namespace graph_layout
 
         vector2_t operator+(const vector2_t& other) const
         {
-            return vector2_t{this->x + other.x, this->y + other.y};
+            return vector2_t{x + other.x, y + other.y};
         }
 
         vector2_t operator-(const vector2_t& other) const
         {
-            return vector2_t{this->x - other.x, this->y - other.y};
+            return vector2_t{x - other.x, y - other.y};
+        }
+        vector2_t operator*(float factor) const
+        {
+            return vector2_t{x * factor, y * factor};
         }
     };
 
@@ -66,6 +70,11 @@ namespace graph_layout
             if (rect.b < other.b) rect.b = other.b;
             return rect;
         }
+
+        vector2_t size() const
+        {
+            return vector2_t{r - l, b - t};
+        }
     };
 
     struct pin_t
@@ -74,6 +83,7 @@ namespace graph_layout
         vector2_t offset{0, 0};
         node_t* owner = nullptr;
         int index_in_layer = -1;
+        pin_t* copy_from = nullptr;
     };
 
     struct edge_t
@@ -100,7 +110,6 @@ namespace graph_layout
         bool belongs_to_head = false;
         // Is the node belongs to the tail component?
         bool belongs_to_tail = false;
-        graph_t* graph = nullptr;
         vector2_t position{0, 0};
         vector2_t size{50, 50};
         std::vector<edge_t*> in_edges{};
@@ -122,9 +131,14 @@ namespace graph_layout
         float get_max_weight(bool is_in) const;
         float get_max_weight_to_node(const node_t* node, bool is_in) const;
         float get_linked_position_to_node(const node_t* node, bool is_in, bool is_horizontal_dir = true) const;
+        void update_pins_offset();
+        void set_sub_graph(connected_graph_t* g);
 
         node_t* clone() const;
         ~node_t();
+    private:
+        friend struct connected_graph_t;
+        connected_graph_t* graph = nullptr;
     };
 
     struct tree_t
@@ -152,24 +166,40 @@ namespace graph_layout
 
     struct graph_t
     {
-        bool is_vertical_layout = false;
-        vector2_t spacing = {80, 80};
+        virtual void translate(vector2_t offset);
+        virtual ~graph_t();
+        void set_position(vector2_t position);
+        virtual std::vector<pin_t*> get_pins() const { return {}; }
+        virtual std::map<pin_t*, vector2_t> get_pins_offset() { return {}; }
+        virtual std::map<node_t*, rect_t> get_bounds() { return {}; }
+        virtual void arrange() {}
         rect_t bound{0, 0, 0, 0};
-        size_t max_iterations = 24;
+        rect_t border{0, 0, 0, 0};
         std::vector<node_t*> nodes;
+        std::map<std::pair<pin_t*, pin_t*>, edge_t*> edges;
+        vector2_t spacing = {80, 80};
+        bool is_vertical_layout = false;
+    };
+
+    struct disconnected_graph_t : public graph_t
+    {
+        
+    };
+
+    struct connected_graph_t : public graph_t
+    {
+        size_t max_iterations = 24;
         node_t* min_ranking_node = nullptr;
         node_t* max_ranking_node = nullptr;
-        std::map<std::pair<pin_t*, pin_t*>, edge_t*> edges;
         std::vector<std::vector<node_t*>> layers;
-        std::map<node_t*, graph_t*> sub_graphs;
+        std::map<node_t*, connected_graph_t*> sub_graphs;
 
-        graph_t* clone() const;
-        graph_t* clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
+        connected_graph_t* clone() const;
+        connected_graph_t* clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
                        std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const;
-        ~graph_t();
 
-        node_t* add_node(graph_t* sub_graph = nullptr);
-        node_t* add_node(const std::string& name, graph_t* sub_graph = nullptr);
+        node_t* add_node(connected_graph_t* sub_graph = nullptr);
+        node_t* add_node(const std::string& name, connected_graph_t* sub_graph = nullptr);
         void set_node_in_rank_slot(node_t* node, rank_slot_t rank_slot);
         void remove_node(node_t* node);
 
@@ -179,18 +209,21 @@ namespace graph_layout
         void invert_edge(edge_t* edge) const;
         void merge_edges();
 
-        std::vector<pin_t*> get_pins() const;
         std::vector<node_t*> get_source_nodes() const;
         std::vector<node_t*> get_sink_nodes() const;
 
-        void translate(vector2_t offset);
-        void set_position(vector2_t position);
         void acyclic() const;
         void rank() const;
         void add_dummy_nodes(tree_t* feasible_tree);
         void assign_layers();
         void ordering();
-        rect_t assign_coordinate();
+
+        void translate(vector2_t offset) override;
+        void arrange() override;
+        std::vector<pin_t*> get_pins() const override;
+        std::map<pin_t*, vector2_t> get_pins_offset() override;
+
+        void assign_coordinate();
         std::vector<rect_t> get_layers_bound() const;
         void sort_layers(std::vector<std::vector<node_t*>>& layer_vec, bool is_down) const;
         tree_t feasible_tree() const;
