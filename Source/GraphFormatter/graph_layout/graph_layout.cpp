@@ -43,6 +43,7 @@ namespace graph_layout
         map<node_t*, float> lower_right_pos_map{};
         map<node_t*, float> combined_pos_map{};
         rect_t assign_coordinate();
+
     private:
         void initialize();
         void mark_conflicts();
@@ -857,7 +858,7 @@ namespace graph_layout
     }
 
     connected_graph_t* connected_graph_t::clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
-                            std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const
+                                                std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const
     {
         auto cloned = new connected_graph_t;
         cloned->bound = bound;
@@ -1080,12 +1081,103 @@ namespace graph_layout
         {
             n->set_position(n->position + offset);
         }
-        bound.offset_by(offset);
+        bound = bound.offset_by(offset);
     }
 
     void graph_t::set_position(vector2_t position)
     {
         translate(vector2_t{position.x - bound.l, position.y - bound.t});
+    }
+
+    void disconnected_graph_t::add_graph(graph_t* graph)
+    {
+        connected_graphs.push_back(graph);
+    }
+
+    void disconnected_graph_t::translate(vector2_t offset)
+    {
+        for (auto graph : connected_graphs)
+        {
+            graph->translate(offset);
+        }
+    }
+
+    std::vector<pin_t*> disconnected_graph_t::get_pins() const
+    {
+        std::set<pin_t*> set;
+        for (auto graph : connected_graphs)
+        {
+            auto pins = graph->get_pins();
+            std::copy(pins.begin(), pins.end(), std::inserter(set, set.end()));
+        }
+        std::vector<pin_t*> result;
+        std::copy(set.begin(), set.end(), std::inserter(result, result.end()));
+        return result;
+    }
+
+    std::map<pin_t*, vector2_t> disconnected_graph_t::get_pins_offset()
+    {
+        std::map<pin_t*, vector2_t> result;
+        for (auto graph : connected_graphs)
+        {
+            const auto& sub_bound = graph->bound;
+            auto offset = vector2_t{sub_bound.l, sub_bound.t} - vector2_t{bound.l, bound.t};
+            auto sub_offsets = graph->get_pins_offset();
+            for (auto& [pin, v] : sub_offsets)
+            {
+                v = v + offset;
+            }
+            std::copy(sub_offsets.begin(), sub_offsets.end(), std::inserter(result, result.end()));
+        }
+        return result;
+    }
+
+    std::map<node_t*, rect_t> disconnected_graph_t::get_bounds()
+    {
+        std::map<node_t*, rect_t> result;
+        for (auto graph : connected_graphs)
+        {
+            auto bounds = graph->get_bounds();
+            std::copy(bounds.begin(), bounds.end(), std::inserter(result, result.end()));
+        }
+        return result;
+    }
+
+    void disconnected_graph_t::arrange()
+    {
+        rect_t pre_bound;
+        bool bound_valid = false;
+        for (auto graph : connected_graphs)
+        {
+            graph->arrange();
+
+            if (bound_valid)
+            {
+                vector2_t start_corner = is_vertical_layout ? vector2_t{pre_bound.r, pre_bound.t} : vector2_t{pre_bound.l, pre_bound.b};
+                graph->set_position(start_corner);
+            }
+            auto Bound = graph->bound;
+            if (bound_valid)
+            {
+                bound = bound.expand(Bound);
+            }
+            else
+            {
+                bound = Bound;
+                bound_valid = true;
+            }
+
+            vector2_t offset = is_vertical_layout ? vector2_t{spacing.y, 0} : vector2_t{0, spacing.y};
+            pre_bound = bound.offset_by(offset);
+        }
+    }
+
+    disconnected_graph_t::~disconnected_graph_t()
+    {
+        for (auto graph : connected_graphs)
+        {
+            delete graph;
+        }
     }
 
     void connected_graph_t::acyclic() const
@@ -1270,7 +1362,7 @@ namespace graph_layout
     std::map<pin_t*, vector2_t> connected_graph_t::get_pins_offset()
     {
         map<pin_t*, vector2_t> result;
-        for(auto n:nodes)
+        for (auto n : nodes)
         {
             for (auto pin : n->out_pins)
             {
@@ -1281,6 +1373,24 @@ namespace graph_layout
             {
                 vector2_t offset = n->position + pin->offset - vector2_t{bound.t, bound.l};
                 result[pin] = offset;
+            }
+        }
+        return result;
+    }
+
+    std::map<node_t*, rect_t> connected_graph_t::get_bounds()
+    {
+        std::map<node_t*, rect_t> result;
+        for (auto n : nodes)
+        {
+            if (n->is_dummy_node) continue;
+            float right = n->position.x + n->size.x;
+            float bottom = n->position.y + n->size.y;
+            result[n] = rect_t{n->position.x, n->position.y, right, bottom};
+            if (n->graph)
+            {
+                auto sub_bounds = n->graph->get_bounds();
+                std::copy(sub_bounds.begin(), sub_bounds.end(), std::inserter(result, result.end()));
             }
         }
         return result;
@@ -1366,7 +1476,7 @@ namespace graph_layout
         vector<edge_t*> result;
         for (auto n : lower)
         {
-            if(excluded_node == n)
+            if (excluded_node == n)
             {
                 continue;
             }

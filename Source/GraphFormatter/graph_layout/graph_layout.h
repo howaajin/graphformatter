@@ -38,6 +38,7 @@ namespace graph_layout
         {
             return vector2_t{x - other.x, y - other.y};
         }
+
         vector2_t operator*(float factor) const
         {
             return vector2_t{x * factor, y * factor};
@@ -48,12 +49,9 @@ namespace graph_layout
     {
         float l = 0, t = 0, r = 0, b = 0;
 
-        void offset_by(vector2_t offset)
+        rect_t offset_by(vector2_t offset) const
         {
-            l += offset.x;
-            r += offset.x;
-            t += offset.y;
-            b += offset.y;
+            return rect_t{l + offset.x, t + offset.y, r + offset.x, b + offset.y};
         }
 
         rect_t expand(vector2_t pos, vector2_t size) const
@@ -136,6 +134,7 @@ namespace graph_layout
 
         node_t* clone() const;
         ~node_t();
+
     private:
         friend struct connected_graph_t;
         connected_graph_t* graph = nullptr;
@@ -172,7 +171,9 @@ namespace graph_layout
         virtual std::vector<pin_t*> get_pins() const { return {}; }
         virtual std::map<pin_t*, vector2_t> get_pins_offset() { return {}; }
         virtual std::map<node_t*, rect_t> get_bounds() { return {}; }
-        virtual void arrange() {}
+
+        virtual void arrange() { }
+
         rect_t bound{0, 0, 0, 0};
         rect_t border{0, 0, 0, 0};
         std::vector<node_t*> nodes;
@@ -183,7 +184,16 @@ namespace graph_layout
 
     struct disconnected_graph_t : public graph_t
     {
-        
+        void add_graph(graph_t* graph);
+        ~disconnected_graph_t() override;
+        void translate(vector2_t offset) override;
+        std::vector<pin_t*> get_pins() const override;
+        std::map<pin_t*, vector2_t> get_pins_offset() override;
+        std::map<node_t*, rect_t> get_bounds() override;
+        void arrange() override;
+
+    private:
+        std::vector<graph_t*> connected_graphs;
     };
 
     struct connected_graph_t : public graph_t
@@ -196,7 +206,7 @@ namespace graph_layout
 
         connected_graph_t* clone() const;
         connected_graph_t* clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
-                       std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const;
+                                 std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const;
 
         node_t* add_node(connected_graph_t* sub_graph = nullptr);
         node_t* add_node(const std::string& name, connected_graph_t* sub_graph = nullptr);
@@ -222,6 +232,7 @@ namespace graph_layout
         void arrange() override;
         std::vector<pin_t*> get_pins() const override;
         std::map<pin_t*, vector2_t> get_pins_offset() override;
+        std::map<node_t*, rect_t> get_bounds() override;
 
         void assign_coordinate();
         std::vector<rect_t> get_layers_bound() const;
