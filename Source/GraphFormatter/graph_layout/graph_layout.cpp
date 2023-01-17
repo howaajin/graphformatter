@@ -846,7 +846,7 @@ namespace graph_layout
         return new_node;
     }
 
-    connected_graph_t* connected_graph_t::clone() const
+    graph_t* connected_graph_t::clone() const
     {
         map<node_t*, node_t*> nodes_map;
         map<pin_t*, pin_t*> pins_map;
@@ -894,7 +894,12 @@ namespace graph_layout
         return cloned;
     }
 
-    node_t* connected_graph_t::add_node(connected_graph_t* sub_graph)
+    graph_t* graph_t::clone() const
+    {
+        return nullptr;
+    }
+
+    node_t* graph_t::add_node(graph_t* sub_graph)
     {
         auto node = new node_t();
         node->graph = sub_graph;
@@ -906,7 +911,7 @@ namespace graph_layout
         return node;
     }
 
-    node_t* connected_graph_t::add_node(const string& name, connected_graph_t* sub_graph)
+    node_t* graph_t::add_node(const string& name, graph_t* sub_graph)
     {
         auto node = add_node(sub_graph);
         node->name = name;
@@ -952,7 +957,7 @@ namespace graph_layout
         }
     }
 
-    void connected_graph_t::remove_node(node_t* node)
+    void graph_t::remove_node(node_t* node)
     {
         if (node->graph)
         {
@@ -961,7 +966,7 @@ namespace graph_layout
         delete node;
     }
 
-    edge_t* connected_graph_t::add_edge(pin_t* tail, pin_t* head)
+    edge_t* graph_t::add_edge(pin_t* tail, pin_t* head)
     {
         auto k = make_pair(tail, head);
         auto it = edges.find(k);
@@ -976,7 +981,7 @@ namespace graph_layout
         return edge;
     }
 
-    void connected_graph_t::remove_edge(const edge_t* edge)
+    void graph_t::remove_edge(const edge_t* edge)
     {
         auto key = make_pair(edge->tail, edge->head);
         edges.erase(key);
@@ -987,7 +992,7 @@ namespace graph_layout
         delete edge;
     }
 
-    void connected_graph_t::remove_edge(pin_t* tail, pin_t* head)
+    void graph_t::remove_edge(pin_t* tail, pin_t* head)
     {
         auto key = make_pair(tail, head);
         auto it = edges.find(key);
@@ -997,7 +1002,7 @@ namespace graph_layout
         }
     }
 
-    void connected_graph_t::invert_edge(edge_t* edge) const
+    void graph_t::invert_edge(edge_t* edge) const
     {
         pin_t* tail = edge->tail;
         pin_t* head = edge->head;

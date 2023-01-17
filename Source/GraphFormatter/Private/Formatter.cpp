@@ -15,6 +15,9 @@
 #include "SGraphNodeComment.h"
 #include "SGraphPanel.h"
 
+#include "graph_layout/graph_layout.h"
+using namespace graph_layout;
+
 /** Hack start. Access to private member legally. */
 #include "PrivateAccessor.h"
 
@@ -88,6 +91,7 @@ void FFormatter::RestoreZoomLevel() const
     ZoomLevels = MoveTemp(TempZoomLevels);
     CurrentPanel->*FPrivateAccessor<FAccess_SNodePanel_CurrentLOD>::Member = OldLOD;
 }
+
 /** Hack end  */
 
 void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
@@ -107,7 +111,7 @@ void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
     }
 }
 
-bool FFormatter::IsAssetSupported(const UObject* Object) 
+bool FFormatter::IsAssetSupported(const UObject* Object)
 {
     const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
     if (const bool* Enabled = Settings->SupportedAssetTypes.Find(Object->GetClass()->GetName()))
@@ -506,6 +510,143 @@ FFormatter& FFormatter::Instance()
 {
     static FFormatter Context;
     return Context;
+}
+
+TArray<UEdGraphNode_Comment*> FFormatter::GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes)
+{
+    TArray<UEdGraphNode_Comment*> CommentNodes;
+    for (auto Node : SelectedNodes)
+    {
+        if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
+        {
+            auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
+            CommentNodes.Add(CommentNode);
+        }
+    }
+    CommentNodes.Sort([](const UEdGraphNode_Comment& A, const UEdGraphNode_Comment& B)
+    {
+        return A.CommentDepth < B.CommentDepth;
+    });
+    return CommentNodes;
+}
+
+graph_t* FFormatter::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment)
+{
+    if (NodesUnderComment.Num() > 0)
+    {
+        auto SubGraph = BuildGraph(NodesUnderComment);
+        float BorderHeight = Instance().GetCommentNodeTitleHeight(CommentNode);
+        const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+        SubGraph->border = rect_t{(float)Settings.CommentBorder, BorderHeight + Settings.CommentBorder, (float)Settings.CommentBorder, (float)Settings.CommentBorder};
+        return SubGraph;
+    }
+    return nullptr;
+}
+
+graph_t* FFormatter::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group)
+{
+    auto SubGraph = BuildGraph(Group);
+    SubGraph->border = rect_t{0, 0, 0, 0};
+    return SubGraph;
+}
+
+TSet<UEdGraphNode*> FFormatter::FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded)
+{
+    TSet<UEdGraphNode*> VisitedNodes;
+    TArray<UEdGraphNode*> Stack;
+    Stack.Push(Node);
+    while (!Stack.IsEmpty())
+    {
+        auto StackNode = Stack.Pop();
+        VisitedNodes.Add(StackNode);
+        for (auto Pin : StackNode->Pins)
+        {
+            if (Pin->Direction != EGPD_Input || IsExecPin(Pin))
+            {
+                continue;
+            }
+            for (auto LinkedPin : Pin->LinkedTo)
+            {
+                auto LinkedNode = LinkedPin->GetOwningNodeUnchecked();
+                if (!Included.Contains(LinkedNode) ||
+                    VisitedNodes.Contains(LinkedNode) ||
+                    Excluded.Contains(LinkedNode) ||
+                    HasExecPin(LinkedNode))
+                {
+                    continue;
+                }
+                Stack.Add(LinkedNode);
+            }
+        }
+    }
+    return VisitedNodes;
+}
+
+graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
+{
+    graph_t* Graph = new graph_t;
+    while (true)
+    {
+        TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(Nodes);
+        if (SortedCommentNodes.Num() != 0)
+        {
+            // Topmost comment node has smallest negative depth value
+            const int32 Depth = SortedCommentNodes[0]->CommentDepth;
+
+            // Collapse all topmost comment nodes into virtual nodes.
+            for (auto CommentNode : SortedCommentNodes)
+            {
+                if (CommentNode->CommentDepth == Depth)
+                {
+                    auto NodesUnderComment = Instance().GetNodesUnderComment(Cast<UEdGraphNode_Comment>(CommentNode));
+                    NodesUnderComment = Nodes.Intersect(NodesUnderComment);
+                    Nodes = Nodes.Difference(NodesUnderComment);
+                    graph_t* CollapsedNode = CollapseCommentNode(CommentNode, NodesUnderComment);
+                    Graph->add_node(CollapsedNode);
+                    Nodes.Remove(CommentNode);
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+
+    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+    if (Instance().IsBlueprint && !IsParameterGroup && Settings.bEnableBlueprintParameterGroup)
+    {
+        TArray<UEdGraphNode*> ExecNodes;
+        for (auto Node : Nodes)
+        {
+            if (HasExecPin(Node))
+            {
+                ExecNodes.Add(Node);
+            }
+        }
+        for (auto Node : ExecNodes)
+        {
+            TSet<UEdGraphNode*> Group;
+            TSet<UEdGraphNode*> Excluded;
+            Group = FindParamGroupForExecNode(Node, Nodes, Excluded);
+            if (Group.Num() >= 2)
+            {
+                graph_t* CollapsedNode = CollapseGroup(Node, Group);
+                Graph->add_node(CollapsedNode);
+                Nodes = Nodes.Difference(Group);
+            }
+        }
+    }
+    for (auto Node : Nodes)
+    {
+        Graph->add_node()->user_ptr = Node;
+    }
+
+    return nullptr;
 }
 
 FFormatter::FFormatter()

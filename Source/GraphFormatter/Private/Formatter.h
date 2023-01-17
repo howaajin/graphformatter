@@ -14,6 +14,12 @@ class FSoundCueEditor;
 class FBehaviorTreeEditor;
 class UEdGraphNode_Comment;
 
+namespace graph_layout
+{
+    struct graph_t;
+    struct node_t;
+}
+
 struct FFormatter
 {
     bool IsVerticalLayout = false;
@@ -49,6 +55,12 @@ struct FFormatter
     void PlaceBlock();
 
     static FFormatter& Instance();
+
+    static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
+    static TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded);
+    static graph_layout::graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup = false);
+    static graph_layout::graph_t* FFormatter::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment);
+    static graph_layout::graph_t* FFormatter::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group);
 
 private:
     FFormatter();

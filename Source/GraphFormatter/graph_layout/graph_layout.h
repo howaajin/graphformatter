@@ -15,6 +15,7 @@
 
 namespace graph_layout
 {
+    struct graph_t;
     struct connected_graph_t;
     struct node_t;
     struct vector2_t;
@@ -102,6 +103,8 @@ namespace graph_layout
     {
         std::string name;
         bool is_dummy_node = false;
+        graph_t* graph = nullptr;
+        void* user_ptr = nullptr;
         int rank{-1};
         float layer_order = -1.0f;
         // Is the node belongs to the head component?
@@ -134,10 +137,6 @@ namespace graph_layout
 
         node_t* clone() const;
         ~node_t();
-
-    private:
-        friend struct connected_graph_t;
-        connected_graph_t* graph = nullptr;
     };
 
     struct tree_t
@@ -171,13 +170,22 @@ namespace graph_layout
         virtual std::vector<pin_t*> get_pins() const { return {}; }
         virtual std::map<pin_t*, vector2_t> get_pins_offset() { return {}; }
         virtual std::map<node_t*, rect_t> get_bounds() { return {}; }
-
         virtual void arrange() { }
+        virtual graph_t* clone() const;
+
+        node_t* add_node(graph_t* sub_graph = nullptr);
+        node_t* add_node(const std::string& name, graph_t* sub_graph = nullptr);
+        void remove_node(node_t* node);
+        edge_t* add_edge(pin_t* tail, pin_t* head);
+        void remove_edge(const edge_t* edge);
+        void remove_edge(pin_t* tail, pin_t* head);
+        void invert_edge(edge_t* edge) const;
 
         rect_t bound{0, 0, 0, 0};
         rect_t border{0, 0, 0, 0};
         std::vector<node_t*> nodes;
         std::map<std::pair<pin_t*, pin_t*>, edge_t*> edges;
+        std::map<node_t*, graph_t*> sub_graphs;
         vector2_t spacing = {80, 80};
         bool is_vertical_layout = false;
     };
@@ -202,21 +210,13 @@ namespace graph_layout
         node_t* min_ranking_node = nullptr;
         node_t* max_ranking_node = nullptr;
         std::vector<std::vector<node_t*>> layers;
-        std::map<node_t*, connected_graph_t*> sub_graphs;
 
-        connected_graph_t* clone() const;
+        graph_t* clone() const override;
         connected_graph_t* clone(std::map<node_t*, node_t*>& nodes_map, std::map<pin_t*, pin_t*>& pins_map, std::map<edge_t*, edge_t*>& edges_map,
                                  std::map<node_t*, node_t*>& nodes_map_inv, std::map<pin_t*, pin_t*>& pins_map_inv, std::map<edge_t*, edge_t*>& edges_map_inv) const;
 
-        node_t* add_node(connected_graph_t* sub_graph = nullptr);
-        node_t* add_node(const std::string& name, connected_graph_t* sub_graph = nullptr);
         void set_node_in_rank_slot(node_t* node, rank_slot_t rank_slot);
-        void remove_node(node_t* node);
 
-        edge_t* add_edge(pin_t* tail, pin_t* head);
-        void remove_edge(const edge_t* edge);
-        void remove_edge(pin_t* tail, pin_t* head);
-        void invert_edge(edge_t* edge) const;
         void merge_edges();
 
         std::vector<node_t*> get_source_nodes() const;
