@@ -58,9 +58,12 @@ struct FFormatter
 
     static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
     static TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded);
-    static graph_layout::graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup = false);
-    static graph_layout::graph_t* FFormatter::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment);
-    static graph_layout::graph_t* FFormatter::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group);
+    static graph_layout::graph_t* BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup = false);
+    static void BuildNode(graph_layout::graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsParameterGroup = false);
+    static void AddNode(graph_layout::graph_t* Graph, UEdGraphNode* Node, graph_layout::graph_t* SubGraph);
+    static graph_layout::graph_t* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment);
+    static graph_layout::graph_t* CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group);
+    static void GetEdgeForNode(graph_layout::graph_t* Graph, graph_layout::node_t* Node, TSet<UEdGraphNode*> SelectedNodes);
 
 private:
     FFormatter();

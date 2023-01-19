@@ -582,9 +582,59 @@ TSet<UEdGraphNode*> FFormatter::FindParamGroupForExecNode(UEdGraphNode* Node, co
     return VisitedNodes;
 }
 
-graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
+void FFormatter::GetEdgeForNode(graph_t * Graph, node_t* Node, TSet<UEdGraphNode*> SelectedNodes)
 {
-    graph_t* Graph = new graph_t;
+    if (Node->graph)
+    {
+        const std::set<void*>& InnerSelectedNodes = Node->graph->get_user_pointers();
+        for (auto SelectedNode : InnerSelectedNodes)
+        {
+            for (auto Pin : static_cast<UEdGraphNode*>(SelectedNode)->Pins)
+            {
+                for (auto LinkedToPin : Pin->LinkedTo)
+                {
+                    const auto LinkedToNode = LinkedToPin->GetOwningNodeUnchecked();
+                    if (InnerSelectedNodes.find(LinkedToNode) != InnerSelectedNodes.end() || !SelectedNodes.Contains(LinkedToNode))
+                    {
+                        continue;
+                    }
+                    pin_t* Tail = Graph->user_ptr_to_pin[Pin];
+                    pin_t* Head = Graph->user_ptr_to_pin[LinkedToPin];
+                    if (Pin->Direction == EGPD_Input)
+                    {
+                        std::swap(Tail, Head);
+                    }
+                    Graph->add_edge(Tail, Head);
+                }
+            }
+        }
+    }
+    else
+    {
+        UEdGraphNode* OriginalNode = static_cast<UEdGraphNode*>(Node->user_ptr);
+        for (auto Pin : OriginalNode->Pins)
+        {
+            for (auto LinkedToPin : Pin->LinkedTo)
+            {
+                const auto LinkedToNode = LinkedToPin->GetOwningNodeUnchecked();
+                if (!SelectedNodes.Contains(LinkedToNode))
+                {
+                    continue;
+                }
+                pin_t* Tail = Graph->user_ptr_to_pin[Pin];
+                pin_t* Head = Graph->user_ptr_to_pin[LinkedToPin];
+                if (Pin->Direction == EGPD_Input)
+                {
+                    std::swap(Tail, Head);
+                }
+                Graph->add_edge(Tail, Head);
+            }
+        }
+    }
+}
+
+void FFormatter::BuildNode(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
+{
     while (true)
     {
         TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(Nodes);
@@ -602,7 +652,7 @@ graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup
                     NodesUnderComment = Nodes.Intersect(NodesUnderComment);
                     Nodes = Nodes.Difference(NodesUnderComment);
                     graph_t* CollapsedNode = CollapseCommentNode(CommentNode, NodesUnderComment);
-                    Graph->add_node(CollapsedNode);
+                    AddNode(Graph, CommentNode, CollapsedNode);
                     Nodes.Remove(CommentNode);
                 }
                 else
@@ -636,17 +686,53 @@ graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup
             if (Group.Num() >= 2)
             {
                 graph_t* CollapsedNode = CollapseGroup(Node, Group);
-                Graph->add_node(CollapsedNode);
+                AddNode(Graph, Node, CollapsedNode);
                 Nodes = Nodes.Difference(Group);
             }
         }
     }
     for (auto Node : Nodes)
     {
-        Graph->add_node()->user_ptr = Node;
+        AddNode(Graph, Node, nullptr);
     }
+}
 
-    return nullptr;
+graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
+{
+    graph_t* Graph = new graph_t;
+    BuildNode(Graph, Nodes, IsParameterGroup);
+    for (auto node : Graph->nodes)
+    {
+        GetEdgeForNode(Graph, node, Nodes);
+    }
+    return Graph;
+}
+
+void FFormatter::AddNode(graph_t* Graph, UEdGraphNode* Node, graph_t* SubGraph)
+{
+    node_t* n = Graph->add_node(SubGraph);
+    n->user_ptr = Node;
+    if (SubGraph)
+    {
+        auto NodePointers = SubGraph->get_user_pointers();
+        for (auto NodePtr : NodePointers)
+        {
+            auto SubNode = (UEdGraphNode*)NodePtr;
+            for (auto Pin : SubNode->Pins)
+            {
+                pin_t* p = n->add_pin(Pin->Direction == EGPD_Input ? pin_type_t::in : pin_type_t::out);
+                p->user_pointer = Pin;
+            }
+        }
+    }
+    else
+    {
+        for (auto Pin : Node->Pins)
+        {
+            pin_t* p = n->add_pin(Pin->Direction == EGPD_Input ? pin_type_t::in : pin_type_t::out);
+            p->user_pointer = Pin;
+        }
+    }
 }
 
 FFormatter::FFormatter()

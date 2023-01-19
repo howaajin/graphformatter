@@ -1177,6 +1177,17 @@ namespace graph_layout
         }
     }
 
+    std::set<void*> disconnected_graph_t::get_user_pointers()
+    {
+        set<void*> result;
+        for (auto graph : connected_graphs)
+        {
+            auto user_pointers = graph->get_user_pointers();
+            std::copy(user_pointers.begin(), user_pointers.end(), std::inserter(result, result.end()));
+        }
+        return result;
+    }
+
     disconnected_graph_t::~disconnected_graph_t()
     {
         for (auto graph : connected_graphs)
@@ -1966,6 +1977,24 @@ namespace graph_layout
             if (is_all_scanned)
             {
                 result.push_back(n);
+            }
+        }
+        return result;
+    }
+
+    std::set<void*> connected_graph_t::get_user_pointers()
+    {
+        std::set<void*> result;
+        for (auto node : nodes)
+        {
+            if (node->graph)
+            {
+                auto user_pointers = node->graph->get_user_pointers();
+                std::copy(user_pointers.begin(), user_pointers.end(), std::inserter(result, result.end()));
+            }
+            if (node->user_ptr != nullptr)
+            {
+                result.insert(node->user_ptr);
             }
         }
         return result;

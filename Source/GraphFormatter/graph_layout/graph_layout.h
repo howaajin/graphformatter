@@ -83,6 +83,7 @@ namespace graph_layout
         node_t* owner = nullptr;
         int index_in_layer = -1;
         pin_t* copy_from = nullptr;
+        void* user_pointer = nullptr;
     };
 
     struct edge_t
@@ -169,6 +170,7 @@ namespace graph_layout
         void set_position(vector2_t position);
         virtual std::vector<pin_t*> get_pins() const { return {}; }
         virtual std::map<pin_t*, vector2_t> get_pins_offset() { return {}; }
+        virtual std::set<void*> get_user_pointers() { return {}; }
         virtual std::map<node_t*, rect_t> get_bounds() { return {}; }
         virtual void arrange() { }
         virtual graph_t* clone() const;
@@ -186,6 +188,7 @@ namespace graph_layout
         std::vector<node_t*> nodes;
         std::map<std::pair<pin_t*, pin_t*>, edge_t*> edges;
         std::map<node_t*, graph_t*> sub_graphs;
+        std::map<void*, pin_t*> user_ptr_to_pin;
         vector2_t spacing = {80, 80};
         bool is_vertical_layout = false;
     };
@@ -199,6 +202,7 @@ namespace graph_layout
         std::map<pin_t*, vector2_t> get_pins_offset() override;
         std::map<node_t*, rect_t> get_bounds() override;
         void arrange() override;
+        std::set<void*> get_user_pointers() override;
 
     private:
         std::vector<graph_t*> connected_graphs;
@@ -233,6 +237,7 @@ namespace graph_layout
         std::vector<pin_t*> get_pins() const override;
         std::map<pin_t*, vector2_t> get_pins_offset() override;
         std::map<node_t*, rect_t> get_bounds() override;
+        std::set<void*> get_user_pointers() override;
 
         void assign_coordinate();
         std::vector<rect_t> get_layers_bound() const;
