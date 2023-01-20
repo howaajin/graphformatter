@@ -712,6 +712,8 @@ void FFormatter::AddNode(graph_t* Graph, UEdGraphNode* Node, graph_t* SubGraph)
 {
     node_t* n = Graph->add_node(SubGraph);
     n->user_ptr = Node;
+    FVector2D Size = Instance().GetNodeSize(Node);
+    n->size = vector2_t{(float)Size.X, (float)Size.Y};
     if (SubGraph)
     {
         auto NodePointers = SubGraph->get_user_pointers();
@@ -730,6 +732,8 @@ void FFormatter::AddNode(graph_t* Graph, UEdGraphNode* Node, graph_t* SubGraph)
         for (auto Pin : Node->Pins)
         {
             pin_t* p = n->add_pin(Pin->Direction == EGPD_Input ? pin_type_t::in : pin_type_t::out);
+            FVector2D Offset = Instance().GetPinOffset(Pin);
+            p->offset = vector2_t{(float)Offset.X, (float)Offset.Y};
             p->user_pointer = Pin;
         }
     }
