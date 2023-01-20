@@ -582,7 +582,7 @@ TSet<UEdGraphNode*> FFormatter::FindParamGroupForExecNode(UEdGraphNode* Node, co
     return VisitedNodes;
 }
 
-void FFormatter::GetEdgeForNode(graph_t * Graph, node_t* Node, TSet<UEdGraphNode*> SelectedNodes)
+void FFormatter::BuildEdgeForNode(graph_t * Graph, node_t* Node, TSet<UEdGraphNode*> SelectedNodes)
 {
     if (Node->graph)
     {
@@ -633,7 +633,7 @@ void FFormatter::GetEdgeForNode(graph_t * Graph, node_t* Node, TSet<UEdGraphNode
     }
 }
 
-void FFormatter::BuildNode(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
+void FFormatter::BuildNodes(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
 {
     while (true)
     {
@@ -651,8 +651,8 @@ void FFormatter::BuildNode(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsPar
                     auto NodesUnderComment = Instance().GetNodesUnderComment(Cast<UEdGraphNode_Comment>(CommentNode));
                     NodesUnderComment = Nodes.Intersect(NodesUnderComment);
                     Nodes = Nodes.Difference(NodesUnderComment);
-                    graph_t* CollapsedNode = CollapseCommentNode(CommentNode, NodesUnderComment);
-                    AddNode(Graph, CommentNode, CollapsedNode);
+                    graph_t* SubGraph = CollapseCommentNode(CommentNode, NodesUnderComment);
+                    AddNode(Graph, CommentNode, SubGraph);
                     Nodes.Remove(CommentNode);
                 }
                 else
@@ -685,8 +685,8 @@ void FFormatter::BuildNode(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsPar
             Group = FindParamGroupForExecNode(Node, Nodes, Excluded);
             if (Group.Num() >= 2)
             {
-                graph_t* CollapsedNode = CollapseGroup(Node, Group);
-                AddNode(Graph, Node, CollapsedNode);
+                graph_t* SubGraph = CollapseGroup(Node, Group);
+                AddNode(Graph, Node, SubGraph);
                 Nodes = Nodes.Difference(Group);
             }
         }
@@ -700,10 +700,10 @@ void FFormatter::BuildNode(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsPar
 graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
 {
     graph_t* Graph = new graph_t;
-    BuildNode(Graph, Nodes, IsParameterGroup);
+    BuildNodes(Graph, Nodes, IsParameterGroup);
     for (auto node : Graph->nodes)
     {
-        GetEdgeForNode(Graph, node, Nodes);
+        BuildEdgeForNode(Graph, node, Nodes);
     }
     return Graph;
 }
