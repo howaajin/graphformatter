@@ -16,6 +16,7 @@
 #include "SGraphPanel.h"
 
 #include "graph_layout/graph_layout.h"
+#include <algorithm>
 using namespace graph_layout;
 
 /** Hack start. Access to private member legally. */
@@ -582,7 +583,7 @@ TSet<UEdGraphNode*> FFormatter::FindParamGroupForExecNode(UEdGraphNode* Node, co
     return VisitedNodes;
 }
 
-void FFormatter::BuildEdgeForNode(graph_t * Graph, node_t* Node, TSet<UEdGraphNode*> SelectedNodes)
+void FFormatter::BuildEdgeForNode(graph_t* Graph, node_t* Node, TSet<UEdGraphNode*> SelectedNodes)
 {
     if (Node->graph)
     {
@@ -700,11 +701,18 @@ void FFormatter::BuildNodes(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsPa
 graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
 {
     graph_t* Graph = new graph_t;
+    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+    Graph->spacing = vector2_t{(float)Settings.HorizontalSpacing, (float)Settings.VerticalSpacing};
     BuildNodes(Graph, Nodes, IsParameterGroup);
     for (auto node : Graph->nodes)
     {
         BuildEdgeForNode(Graph, node, Nodes);
     }
+    auto Comparer = [](const node_t* A, const node_t* B)
+    {
+        return A->position.y < B->position.y;
+    };
+    std::sort(Graph->nodes.begin(), Graph->nodes.end(), Comparer);
     return Graph;
 }
 
