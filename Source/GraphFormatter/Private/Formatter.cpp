@@ -433,6 +433,10 @@ void FFormatter::Format()
     Graph->Format();
     auto BoundMap = Graph->GetBoundMap();
     delete Graph;
+    //auto Graph = BuildGraph(SelectedNodes);
+    //Graph->arrange();
+    //auto BoundMap = GetBoundMap(Graph);
+    //delete Graph;
     const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
     for (auto [Node, Rect] : BoundMap)
     {
@@ -546,7 +550,7 @@ graph_t* FFormatter::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGrap
 
 graph_t* FFormatter::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group)
 {
-    auto SubGraph = BuildGraph(Group);
+    auto SubGraph = BuildGraph(Group, true);
     SubGraph->border = rect_t{0, 0, 0, 0};
     return SubGraph;
 }
@@ -634,6 +638,17 @@ void FFormatter::BuildEdgeForNode(graph_t* Graph, node_t* Node, TSet<UEdGraphNod
     }
 }
 
+TMap<UEdGraphNode*, FSlateRect> FFormatter::GetBoundMap(graph_layout::graph_t* Graph)
+{
+    auto Bounds = Graph->get_bounds();
+    TMap<UEdGraphNode*, FSlateRect> Result;
+    for (auto [Node, Rect] : Bounds)
+    {
+        Result.Add((UEdGraphNode*)Node->user_ptr, FSlateRect(Rect.l, Rect.t, Rect.r, Rect.b));
+    }
+    return Result;
+}
+
 void FFormatter::BuildNodes(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
 {
     while (true)
@@ -698,22 +713,31 @@ void FFormatter::BuildNodes(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsPa
     }
 }
 
-graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
+void FFormatter::BuildEdges(graph_layout::graph_t* Graph, TSet<UEdGraphNode*> SelectedNodes)
 {
-    graph_t* Graph = new graph_t;
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    Graph->spacing = vector2_t{(float)Settings.HorizontalSpacing, (float)Settings.VerticalSpacing};
-    BuildNodes(Graph, Nodes, IsParameterGroup);
     for (auto node : Graph->nodes)
     {
-        BuildEdgeForNode(Graph, node, Nodes);
+        BuildEdgeForNode(Graph, node, SelectedNodes);
     }
     auto Comparer = [](const node_t* A, const node_t* B)
     {
         return A->position.y < B->position.y;
     };
     std::sort(Graph->nodes.begin(), Graph->nodes.end(), Comparer);
-    return Graph;
+}
+
+graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
+{
+    graph_t* Graph = new graph_t;
+    BuildNodes(Graph, Nodes, true);
+    BuildEdges(Graph, Nodes);
+
+    graph_t* RealGraph = Graph->to_connected_or_disconnected();
+    delete Graph;
+
+    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
+    RealGraph->spacing = vector2_t{(float)Settings.HorizontalSpacing, (float)Settings.VerticalSpacing};
+    return RealGraph;
 }
 
 void FFormatter::AddNode(graph_t* Graph, UEdGraphNode* Node, graph_t* SubGraph)
@@ -732,6 +756,7 @@ void FFormatter::AddNode(graph_t* Graph, UEdGraphNode* Node, graph_t* SubGraph)
             {
                 pin_t* p = n->add_pin(Pin->Direction == EGPD_Input ? pin_type_t::in : pin_type_t::out);
                 p->user_pointer = Pin;
+                Graph->user_ptr_to_pin[Pin] = p;
             }
         }
     }
@@ -743,6 +768,7 @@ void FFormatter::AddNode(graph_t* Graph, UEdGraphNode* Node, graph_t* SubGraph)
             FVector2D Offset = Instance().GetPinOffset(Pin);
             p->offset = vector2_t{(float)Offset.X, (float)Offset.Y};
             p->user_pointer = Pin;
+            Graph->user_ptr_to_pin[Pin] = p;
         }
     }
 }

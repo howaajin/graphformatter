@@ -172,7 +172,11 @@ namespace graph_layout
         virtual std::map<pin_t*, vector2_t> get_pins_offset() { return {}; }
         virtual std::set<void*> get_user_pointers() { return {}; }
         virtual std::map<node_t*, rect_t> get_bounds() { return {}; }
-        virtual void arrange() { }
+
+        virtual void arrange()
+        {
+        }
+
         virtual graph_t* clone() const;
 
         node_t* add_node(graph_t* sub_graph = nullptr);
@@ -182,6 +186,10 @@ namespace graph_layout
         void remove_edge(const edge_t* edge);
         void remove_edge(pin_t* tail, pin_t* head);
         void invert_edge(edge_t* edge) const;
+
+        std::vector<std::set<node_t*>> to_connected_groups() const;
+        graph_t* to_connected_or_disconnected() const;
+        static graph_t* to_connected(const std::set<node_t*>& nodes);
 
         rect_t bound{0, 0, 0, 0};
         rect_t border{0, 0, 0, 0};

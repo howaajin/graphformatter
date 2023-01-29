@@ -1020,6 +1020,102 @@ namespace graph_layout
         edge->is_inverted = true;
     }
 
+    std::vector<std::set<node_t*>> graph_t::to_connected_groups() const
+    {
+        vector<set<node_t*>> result;
+        set<node_t*> checked_nodes;
+        vector<node_t*> stack;
+        for (auto node : nodes)
+        {
+            if (checked_nodes.find(node) == checked_nodes.end())
+            {
+                checked_nodes.insert(node);
+                stack.push_back(node);
+            }
+            set<node_t*> isolated_nodes;
+            while (!stack.empty())
+            {
+                node_t* n = stack.back();
+                stack.pop_back();
+                isolated_nodes.insert(n);
+                set<node_t*> connected_nodes = n->get_direct_connected_nodes([](edge_t* e) { return true; });
+                for (auto ConnectedNode : connected_nodes)
+                {
+                    if (checked_nodes.find(node) == checked_nodes.end())
+                    {
+                        stack.push_back(ConnectedNode);
+                        checked_nodes.insert(ConnectedNode);
+                    }
+                }
+            }
+            if (!isolated_nodes.empty())
+            {
+                result.push_back(isolated_nodes);
+            }
+        }
+        return result;
+    }
+
+    graph_t* graph_t::to_connected_or_disconnected() const
+    {
+        auto groups = to_connected_groups();
+        if (groups.size() == 1)
+        {
+            return to_connected(groups[0]);
+        }
+        else
+        {
+            auto disconnected_graph = new disconnected_graph_t;
+            for (const auto& group : groups)
+            {
+                disconnected_graph->add_graph(to_connected(group));
+            }
+            return disconnected_graph;
+        }
+    }
+
+    graph_t* graph_t::to_connected(const std::set<node_t*>& nodes)
+    {
+        map<pin_t*, pin_t*> m;
+        auto graph = new connected_graph_t;
+        for (auto n : nodes)
+        {
+            auto node = graph->add_node(n->graph);
+            node->size = n->size;
+            node->user_ptr = n->user_ptr;
+            for (auto p : n->in_pins)
+            {
+                auto pin = node->add_pin(pin_type_t::in);
+                pin->user_pointer = p->user_pointer;
+                graph->user_ptr_to_pin[p->user_pointer] = pin;
+                m[pin] = p;
+            }
+            for (auto p : n->out_pins)
+            {
+                auto pin = node->add_pin(pin_type_t::in);
+                pin->user_pointer = p->user_pointer;
+                graph->user_ptr_to_pin[p->user_pointer] = pin;
+                m[pin] = p;
+            }
+        }
+        for (auto n : nodes)
+        {
+            for (auto e : n->in_edges)
+            {
+                pin_t* tail = m[e->tail];
+                pin_t* head = m[e->head];
+                graph->add_edge(tail, head);
+            }
+            for (auto e : n->out_edges)
+            {
+                pin_t* tail = m[e->tail];
+                pin_t* head = m[e->head];
+                graph->add_edge(tail, head);
+            }
+        }
+        return graph;
+    }
+
     void connected_graph_t::merge_edges()
     {
         map<pair<node_t*, node_t*>, vector<edge_t*>> tail_to_head_edges_map;
