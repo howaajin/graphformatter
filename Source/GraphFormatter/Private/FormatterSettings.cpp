@@ -16,6 +16,7 @@ UFormatterSettings::UFormatterSettings()
         {"SoundCue", true},
         {"NiagaraScript", true},
         {"MetaSoundSource", true},
+        {"LevelScriptBlueprint", true},
     })
     , DisableToolbar(false)
     , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
