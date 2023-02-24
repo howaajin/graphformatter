@@ -15,8 +15,11 @@ UFormatterSettings::UFormatterSettings()
         {"Material", true},
         {"SoundCue", true},
         {"NiagaraScript", true},
+        {"NiagaraSystem", true},
         {"MetaSoundSource", true},
         {"LevelScriptBlueprint", true},
+        {"EditorUtilityBlueprint", true},
+        {"EditorUtilityWidgetBlueprint", true},
     })
     , DisableToolbar(false)
     , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)

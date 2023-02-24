@@ -957,7 +957,7 @@ void FFormatterGraph::BuildNodesAndEdges(TSet<UEdGraphNode*> SelectedNodes)
     BuildEdges(SelectedNodes);
     Nodes.Sort([](const FFormatterNode& A, const FFormatterNode& B)
     {
-        return A.GetPosition().Y < B.GetPosition().Y;
+        return FFormatter::Instance().IsVerticalLayout ? A.GetPosition().X < B.GetPosition().X : A.GetPosition().Y < B.GetPosition().Y;
     });
 }
 

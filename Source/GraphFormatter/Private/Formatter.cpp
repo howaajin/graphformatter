@@ -110,6 +110,10 @@ void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
     {
         IsBlueprint = true;
     }
+    if (Object->GetClass()->GetName() == "NiagaraSystem")
+    {
+        IsVerticalLayout = true;
+    }
 }
 
 bool FFormatter::IsAssetSupported(const UObject* Object)
