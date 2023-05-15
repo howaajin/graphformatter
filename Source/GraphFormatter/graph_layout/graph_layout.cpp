@@ -13,6 +13,7 @@
 #include <iostream>
 #include <fstream>
 #include <queue>
+#include <cmath>
 
 namespace graph_layout
 {
