@@ -18,11 +18,6 @@ namespace UnrealBuildTool.Rules
 			PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Public"));
             PublicIncludePaths.Add(ModuleDirectory);
 
-            PrivateIncludePaths.AddRange(
-                new string[] {
-                     Path.Combine(EngineDir, "Plugins", "Runtime"),
-                });
-
             PrivateDependencyModuleNames.AddRange(
 				new string[]
 				{
@@ -39,7 +34,6 @@ namespace UnrealBuildTool.Rules
 					"GraphEditor",
 					"BlueprintGraph",
 					"MaterialEditor",
-					"Projects",
 					"AIModule",
 					"AIGraph",
 					"BehaviorTreeEditor",
