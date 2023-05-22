@@ -26,6 +26,8 @@ class FFormatterModule : public IGraphFormatterModule
 {
     virtual void StartupModule() override;
     virtual void ShutdownModule() override;
+    virtual void FormatGraphAutomated(TObjectPtr<UObject> Object) override;
+
     void HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance);
     void HandleEditorWidgetCreated(UObject* Object);
     void HandleAssetEditorClosed(UObject* Object, EAssetEditorCloseReason Reason);
@@ -361,6 +363,28 @@ void FFormatterModule::ShutdownModule()
         GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().RemoveAll(this);
     }
     FFormatterStyle::Shutdown();
+}
+
+void FFormatterModule::FormatGraphAutomated(const TObjectPtr<UObject> Object)
+{
+	const auto AssetEditor = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
+	
+	AssetEditor->OpenEditorForAsset(Object);
+
+	const auto EditorInstance = AssetEditor->FindEditorForAsset(Object.Get(), false);
+	
+	if(!EditorInstance)
+	{
+		return;
+	}
+
+	if (SGraphEditor* Editor = FindEditorForObject(Object.Get()))
+	{
+		FFormatter::Instance().SetCurrentEditor(Editor, Object.Get());
+		FFormatter::Instance().Format();
+	}
+
+	EditorInstance->CloseWindow();
 }
 
 #undef LOCTEXT_NAMESPACE
