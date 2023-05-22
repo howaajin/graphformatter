@@ -20,7 +20,7 @@ namespace UnrealBuildTool.Rules
 
             PrivateIncludePaths.AddRange(
                 new string[] {
-                     Path.Combine(EngineDir, @"Plugins\Runtime"),
+                     Path.Combine(EngineDir, "Plugins", "Runtime"),
                 });
 
             PrivateDependencyModuleNames.AddRange(
