@@ -18,6 +18,7 @@
 #include "GraphEditorSettings.h"
 #include "ScopedTransaction.h"
 #include "FormatterLog.h"
+#include "SGraphPanel.h"
 #include "Widgets/Input/SSpinBox.h"
 
 #define LOCTEXT_NAMESPACE "GraphFormatter"
@@ -380,6 +381,8 @@ void FFormatterModule::FormatGraphAutomated(const TObjectPtr<UObject> Object)
 
 	if (SGraphEditor* Editor = FindEditorForObject(Object.Get()))
 	{
+		Editor->GetGraphPanel()->Update();
+
 		FFormatter::Instance().SetCurrentEditor(Editor, Object.Get());
 		FFormatter::Instance().Format();
 	}
