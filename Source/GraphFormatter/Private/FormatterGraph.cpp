@@ -1412,6 +1412,9 @@ TArray<TArray<FFormatterNode*>> GetLayeredListFromNewGraph(const FConnectedGraph
 
 void FConnectedGraph::DoLayering()
 {
+    // WIP: After extensive use, it has been discovered that there is a bug in tree_t::find_min_incident_edge,
+    // which leads to the inability to find the minimum incident edge and causes errors. Therefore, it has been disabled.
+#if 0
     LayeredList = GetLayeredListFromNewGraph(this);
 
     if (FFormatter::Instance().IsBehaviorTree)
@@ -1422,6 +1425,7 @@ void FConnectedGraph::DoLayering()
         }
     }
     return;
+#endif
 
     LayeredList.Empty();
     TSet<FFormatterNode*> Set;
