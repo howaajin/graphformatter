@@ -29,3 +29,9 @@ It is based on the ideas of [Layered graph drawing](https://en.wikipedia.org/wik
 References:
 [Fast and Simple Horizontal Coordinate Assignment](https://link.springer.com/chapter/10.1007/3-540-45848-4_3).  
 [Size- and Port-Aware Horizontal Node Coordinate Assignment](https://link.springer.com/chapter/10.1007/978-3-319-27261-0_12).  
+
+## Purchase my other works to support me
+
+[(New)Bring back the system shadow to the Unreal Editor in Windows](https://www.unrealengine.com/marketplace/product/editor-windows-frame)
+
+[Marketplace page](https://www.unrealengine.com/marketplace/zh-CN/profile/FeiSu?count=20&sortBy=effectiveDate&sortDir=DESC&start=0)
