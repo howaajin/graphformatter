@@ -20,6 +20,7 @@ UFormatterSettings::UFormatterSettings()
         {"LevelScriptBlueprint", true},
         {"EditorUtilityBlueprint", true},
         {"EditorUtilityWidgetBlueprint", true},
+        {"PCGGraph", true},
     })
     , DisableToolbar(false)
     , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
