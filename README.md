@@ -17,6 +17,9 @@ https://www.unrealengine.com/marketplace/graph-formatter
 
 Select nodes you want to arrange, or just deselect all nodes and press "Format Graph" button on the toolbar.  
 Configure it in "Editor Preferences/Plugins/Graph Formatter".  
+
+Regarding the [PCG Graph](https://docs.unrealengine.com/5.2/en-US/procedural-content-generation-overview/), this plugin is now functional with keyboard shortcuts. However, due to the difference in how the PCG Graph extends the Toolbar compared to other Graph editors, it causes subsequent extensions to disappear.
+
 [Enable it in more editors](https://github.com/howaajin/graphformatter/wiki/Enable-it-in-more-editors)  
 [Parameter grouping](https://github.com/howaajin/graphformatter/wiki/With-and-without-parameter-grouping)  
 [Enable by default for all project](https://github.com/howaajin/graphformatter/wiki/Make-a-plugin-enabled-by-default-for-all-projects)  
