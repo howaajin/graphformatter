@@ -1350,6 +1350,7 @@ TArray<FFormatterNode*> FConnectedGraph::GetLeavesWithPathDepth0() const
 
 static bool BehaviorTreeNodeComparer(const FFormatterNode& A, const FFormatterNode& B)
 {
+    return A.GetPosition().X < B.GetPosition().X;
     UBehaviorTreeGraphNode* StateNodeA = static_cast<UBehaviorTreeGraphNode*>(A.OriginalNode);
     UBTNode* BTNodeA = static_cast<UBTNode*>(StateNodeA->NodeInstance);
     int32 IndexA = 0;
@@ -1454,6 +1455,10 @@ void FConnectedGraph::DoLayering()
         }
         Set.Append(Layer);
         TArray<FFormatterNode*> Array = Layer.Array();
+        if (FFormatter::Instance().IsBehaviorTree)
+        {
+            Array.Sort(BehaviorTreeNodeComparer);
+        }
         LayeredList.Add(Array);
     }
 }
