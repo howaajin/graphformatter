@@ -1454,10 +1454,6 @@ void FConnectedGraph::DoLayering()
         }
         Set.Append(Layer);
         TArray<FFormatterNode*> Array = Layer.Array();
-        if (FFormatter::Instance().IsBehaviorTree)
-        {
-            Array.Sort(BehaviorTreeNodeComparer);
-        }
         LayeredList.Add(Array);
     }
 }
