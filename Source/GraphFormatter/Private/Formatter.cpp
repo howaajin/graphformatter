@@ -537,6 +537,10 @@ void FFormatter::Format()
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
     SelectedNodes = DoSelectionStrategy(CurrentGraph, SelectedNodes);
+    for (const auto SelectedNode : SelectedNodes)
+    {
+        CurrentEditor->SetNodeSelection(SelectedNode, true);
+    }
     auto Graph = FFormatterGraph::Build(SelectedNodes);
     Graph->Format();
     auto BoundMap = Graph->GetBoundMap();
