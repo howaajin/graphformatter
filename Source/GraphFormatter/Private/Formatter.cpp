@@ -398,10 +398,112 @@ TSet<UEdGraphNode*> FFormatter::GetNodesUnderComment(const UEdGraphNode_Comment*
     return Result;
 }
 
+static TMap<UEdGraphNode*, UEdGraphNode_Comment*> NodeUnderCommentHash()
+{
+    TMap<UEdGraphNode*, UEdGraphNode_Comment*> Result;
+    TSet<UEdGraphNode*> Nodes = FFormatter::Instance().GetAllNodes();
+    while (true)
+    {
+        TArray<UEdGraphNode_Comment*> SortedCommentNodes = FFormatter::GetSortedCommentNodes(Nodes);
+        if (SortedCommentNodes.Num() != 0)
+        {
+            // Topmost comment node has smallest negative depth value
+            const int32 Depth = SortedCommentNodes[0]->CommentDepth;
+
+            // Collapse all topmost comment nodes into virtual nodes.
+            for (auto CommentNode : SortedCommentNodes)
+            {
+                if (CommentNode->CommentDepth == Depth)
+                {
+                    auto NodesUnderComment = FFormatter::Instance().GetNodesUnderComment(Cast<UEdGraphNode_Comment>(CommentNode));
+                    NodesUnderComment = Nodes.Intersect(NodesUnderComment);
+                    Nodes = Nodes.Difference(NodesUnderComment);
+                    Nodes.Remove(CommentNode);
+                    for (auto Node : NodesUnderComment)
+                    {
+                        Result.Add(Node, CommentNode);
+                    }
+                }
+                else
+                {
+                    break;
+                }
+            }
+        }
+        else
+        {
+            break;
+        }
+    }
+    return Result;
+}
+
+// Get all nodes connected to InNode, and if a node is under a Comment node, consider it connected to all nodes under that Comment node.
+static TSet<UEdGraphNode*> GetLinkedNodes(UEdGraphNode* InNode)
+{
+    auto NodeToCommentMap = NodeUnderCommentHash();
+
+    TSet<UEdGraphNode*> VisitedNodes;
+    TQueue<UEdGraphNode*> PendingNodes;
+    PendingNodes.Enqueue(InNode);
+    while (!PendingNodes.IsEmpty())
+    {
+        UEdGraphNode* Node;
+        PendingNodes.Dequeue(Node);
+        VisitedNodes.Add(Node);
+        for (const UEdGraphPin* Pin : Node->Pins)
+        {
+            for (UEdGraphPin* LinkedPin : Pin->LinkedTo)
+            {
+                UEdGraphNode* LinkedNode = LinkedPin->GetOwningNodeUnchecked();
+                if (!VisitedNodes.Contains(LinkedNode))
+                {
+                    if (NodeToCommentMap.Contains(LinkedNode))
+                    {
+                        UEdGraphNode_Comment* Comment = NodeToCommentMap[LinkedNode];
+                        if (!VisitedNodes.Contains(Comment))
+                        {
+                            VisitedNodes.Add(Comment);
+                            auto NodesUnderComment = FFormatter::Instance().GetNodesUnderComment(Comment);
+                            for (auto NodeUnderComment : NodesUnderComment)
+                            {
+                                if (!VisitedNodes.Contains(NodeUnderComment))
+                                {
+                                    PendingNodes.Enqueue(NodeUnderComment);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        PendingNodes.Enqueue(LinkedNode);
+                    }
+                }
+            }
+        }
+    }
+    return VisitedNodes;
+}
+
+static TSet<UEdGraphNode*> SingleNodeSelectionStrategy(UEdGraphNode* InNode)
+{
+    return GetLinkedNodes(InNode);
+}
+
 static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNode*> Selected)
 {
     if (Selected.Num() != 0)
     {
+        if (Selected.Num() == 1)
+        {
+            for (UEdGraphNode* GraphNode : Selected)
+            {
+                if (!GraphNode->IsA(UEdGraphNode_Comment::StaticClass()))
+                {
+                    return SingleNodeSelectionStrategy(GraphNode);
+                }
+            }
+        }
         TSet<UEdGraphNode*> SelectedGraphNodes;
         for (UEdGraphNode* GraphNode : Selected)
         {
