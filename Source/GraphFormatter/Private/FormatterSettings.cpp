@@ -21,6 +21,8 @@ UFormatterSettings::UFormatterSettings()
         {"EditorUtilityBlueprint", true},
         {"EditorUtilityWidgetBlueprint", true},
         {"PCGGraph", true},
+        {"InterchangeBlueprintPipelineBase", true},
+        {"MetaSoundPatch", true},
     })
     , DisableToolbar(false)
     , PositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian)
