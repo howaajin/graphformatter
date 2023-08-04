@@ -26,6 +26,14 @@ Regarding the [PCG Graph](https://docs.unrealengine.com/5.2/en-US/procedural-con
 [The useful Place Block command](https://github.com/howaajin/graphformatter/wiki/Usage-of-PlaceBlock-command)  
 You can find more details in the [Wiki](https://github.com/howaajin/graphformatter/wiki).
 
+## Useful Tips
+
+1. **Comment-Based Grouping:** This plugin employs comment nodes to form groups. Grouping complex nodes based on comments can lead to more effective outcomes.
+
+2. **Managing Node Complexity:** In situations where a node has an excessive number of incoming or outgoing connections, both manual and automatic arrangement might not result in a tidy structure. In such cases, it's advisable make the result as a variable and duplicate new nodes for each usage of this variable.
+
+3. **Avoiding Lengthy Connections:** Instead, consider utilizing variables or Reroute nodes within the material editor to maintain clarity and organization.
+
 ## Technical Details
 
 It is based on the ideas of [Layered graph drawing](https://en.wikipedia.org/wiki/Layered_graph_drawing).  
