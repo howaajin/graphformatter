@@ -1455,11 +1455,32 @@ void FConnectedGraph::DoLayering()
         }
         Set.Append(Layer);
         TArray<FFormatterNode*> Array = Layer.Array();
-        if (FFormatter::Instance().IsBehaviorTree)
+        const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+        if (Settings->MaxLayerNodes)
         {
-            Array.Sort(BehaviorTreeNodeComparer);
+            TArray<FFormatterNode*> SubLayer;
+            for (int j = 0; j != Array.Num(); j++)
+            {
+                SubLayer.Add(Array[j]);
+                if (SubLayer.Num() == Settings->MaxLayerNodes || j == Array.Num() - 1)
+                {
+                    if (FFormatter::Instance().IsBehaviorTree)
+                    {
+                        SubLayer.Sort(BehaviorTreeNodeComparer);
+                    }
+                    LayeredList.Add(SubLayer);
+                    SubLayer.Reset();
+                }
+            }
         }
-        LayeredList.Add(Array);
+        else
+        {
+            if (FFormatter::Instance().IsBehaviorTree)
+            {
+                Array.Sort(BehaviorTreeNodeComparer);
+            }
+            LayeredList.Add(Array);
+        }
     }
 }
 

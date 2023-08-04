@@ -53,6 +53,9 @@ public:
     UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
     int32 VerticalSpacing;
 
+    /** Maximum number of nodes per layer, 0 indicates no restriction */
+    UPROPERTY(config, EditAnywhere, Category = "Options", meta = (ClampMin = 0))
+    int32 MaxLayerNodes;
 
     /** Whether to enable parameter grouping in Blueprint Editor */
     UPROPERTY(config, EditAnywhere, Category = "Options")
