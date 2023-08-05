@@ -643,7 +643,7 @@ TSet<UEdGraphNode*> FFormatterGraph::GetNodesConnected(const TSet<UEdGraphNode*>
 
 bool FFormatterGraph::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EInOutOption Option, bool bInvert)
 {
-    FSlateRect Bound;
+    FBox2D Bound(ForceInit);
     for (auto Node : SelectedNodes)
     {
         for (auto Pin : Node->Pins)
@@ -664,14 +664,14 @@ bool FFormatterGraph::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedN
                         auto Pos = FFormatter::Instance().GetNodePosition(bInvert ? Node : LinkedNode);
                         auto PinOffset = FFormatter::Instance().GetPinOffset(bInvert ? Pin : LinkedPin);
                         auto LinkedPos = Pos + PinOffset;
-                        FSlateRect PosZeroBound = FSlateRect::FromPointAndExtent(LinkedPos, FVector2D(0, 0));
-                        Bound = Bound.IsValid() ? Bound.Expand(PosZeroBound) : PosZeroBound;
+                        FBox2D PosZeroBound = FBox2D(LinkedPos, LinkedPos);
+                        Bound = Bound.bIsValid ? Bound + PosZeroBound : PosZeroBound;
                     }
                 }
             }
         }
     }
-    if (Bound.IsValid())
+    if (Bound.bIsValid)
     {
         OutCenter = Bound.GetCenter();
         return true;
@@ -807,11 +807,11 @@ FFormatterGraph* FFormatterGraph::Build(TSet<UEdGraphNode*> SelectedNodes)
     }
 }
 
-TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection, bool IsParameterGroup)
+TArray<FBox2D> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection, bool IsParameterGroup)
 {
-    TArray<FSlateRect> LayersBound;
+    TArray<FBox2D> LayersBound;
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    FSlateRect TotalBound;
+    FBox2D TotalBound(ForceInit);
     FVector2D Spacing;
     if (IsHorizontalDirection)
     {
@@ -835,11 +835,11 @@ TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatte
     for (int32 i = 0; i < InLayeredNodes.Num(); i++)
     {
         const auto& Layer = InLayeredNodes[i];
-        FSlateRect Bound;
+        FBox2D Bound(ForceInit);
         FVector2D Position;
-        if (TotalBound.IsValid())
+        if (TotalBound.bIsValid)
         {
-            Position = TotalBound.GetBottomRight() + Spacing;
+            Position = TotalBound.Max + Spacing;
         }
         else
         {
@@ -847,19 +847,19 @@ TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatte
         }
         for (auto Node : Layer)
         {
-            if (Bound.IsValid())
+            if (Bound.bIsValid)
             {
-                Bound = Bound.Expand(FSlateRect::FromPointAndExtent(Position, Node->Size));
+                Bound += FBox2D(Position, Position + Node->Size);
             }
             else
             {
-                Bound = FSlateRect::FromPointAndExtent(Position, Node->Size);
+                Bound = FBox2D(Position, Position + Node->Size);
             }
         }
         LayersBound.Add(Bound);
-        if (TotalBound.IsValid())
+        if (TotalBound.bIsValid)
         {
-            TotalBound = TotalBound.Expand(Bound);
+            TotalBound += Bound;
         }
         else
         {
@@ -1114,16 +1114,16 @@ FFormatterNode* FFormatterGraph::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdG
 
 void FFormatterGraph::SetPosition(const FVector2D& Position)
 {
-    const FVector2D Offset = Position - TotalBound.GetTopLeft();
+    const FVector2D Offset = Position - TotalBound.Min;
     OffsetBy(Offset);
 }
 
 void FFormatterGraph::SetBorder(float Left, float Top, float Right, float Bottom)
 {
-    this->Border = FSlateRect(Left, Top, Right, Bottom);
+    this->Border = FBox2D(FVector2D(Left, Top), FVector2D(Right, Bottom));
 }
 
-FSlateRect FFormatterGraph::GetBorder() const
+FBox2D FFormatterGraph::GetBorder() const
 {
     return Border;
 }
@@ -1184,7 +1184,7 @@ TMap<UEdGraphPin*, FVector2D> FDisconnectedGraph::GetPinsOffset()
     for (auto Graph : ConnectedGraphs)
     {
         auto SubBound = Graph->GetTotalBound();
-        auto Offset = SubBound.GetTopLeft() - GetTotalBound().GetTopLeft();
+        auto Offset = SubBound.Min - GetTotalBound().Min;
         auto SubOffsets = Graph->GetPinsOffset();
         for (auto& SubOffsetPair : SubOffsets)
         {
@@ -1228,20 +1228,22 @@ TSet<UEdGraphNode*> FDisconnectedGraph::GetOriginalNodes() const
 void FDisconnectedGraph::Format()
 {
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    FSlateRect PreBound;
+    FBox2D PreBound(ForceInit);
     for (auto Graph : ConnectedGraphs)
     {
         Graph->Format();
 
-        if (PreBound.IsValid())
+        if (PreBound.bIsValid)
         {
-            FVector2D StartCorner = FFormatter::Instance().IsVerticalLayout ? PreBound.GetTopRight() : PreBound.GetBottomLeft();
+            FVector2D TopRight = FVector2D(PreBound.Max.X, PreBound.Min.Y);
+            FVector2D BottomLeft = FVector2D(PreBound.Min.X, PreBound.Max.Y);
+            FVector2D StartCorner = FFormatter::Instance().IsVerticalLayout ? TopRight : BottomLeft;
             Graph->SetPosition(StartCorner);
         }
         auto Bound = Graph->GetTotalBound();
-        if (TotalBound.IsValid())
+        if (TotalBound.bIsValid)
         {
-            TotalBound = TotalBound.Expand(Bound);
+            TotalBound += Bound;
         }
         else
         {
@@ -1249,7 +1251,7 @@ void FDisconnectedGraph::Format()
         }
 
         FVector2D Offset = FFormatter::Instance().IsVerticalLayout ? FVector2D(Settings.VerticalSpacing, 0) : FVector2D(0, Settings.VerticalSpacing);
-        PreBound = TotalBound.OffsetBy(Offset);
+        PreBound = TotalBound.ShiftBy(Offset);
     }
 }
 
@@ -1261,9 +1263,9 @@ void FDisconnectedGraph::OffsetBy(const FVector2D& InOffset)
     }
 }
 
-TMap<UEdGraphNode*, FSlateRect> FDisconnectedGraph::GetBoundMap()
+TMap<UEdGraphNode*, FBox2D> FDisconnectedGraph::GetBoundMap()
 {
-    TMap<UEdGraphNode*, FSlateRect> Result;
+    TMap<UEdGraphNode*, FBox2D> Result;
     for (auto Graph : ConnectedGraphs)
     {
         Result.Append(Graph->GetBoundMap());
@@ -1631,12 +1633,12 @@ TMap<UEdGraphPin*, FVector2D> FConnectedGraph::GetPinsOffset()
     {
         for (auto OutPin : Node->OutPins)
         {
-            FVector2D PinOffset = Node->Position + OutPin->NodeOffset - TotalBound.GetTopLeft();
+            FVector2D PinOffset = Node->Position + OutPin->NodeOffset - TotalBound.Min;
             Result.Add(OutPin->OriginalPin, PinOffset);
         }
         for (auto InPin : Node->InPins)
         {
-            FVector2D PinOffset = Node->Position + InPin->NodeOffset - TotalBound.GetTopLeft();
+            FVector2D PinOffset = Node->Position + InPin->NodeOffset - TotalBound.Min;
             Result.Add(InPin->OriginalPin, PinOffset);
         }
     }
@@ -1698,10 +1700,10 @@ void FConnectedGraph::Format()
         auto Node = NodesMap[Key];
         SubGraph->Format();
         auto SubGraphBorder = SubGraph->GetBorder();
-        Node->UpdatePinsOffset(FVector2D(SubGraphBorder.Left, SubGraphBorder.Top));
+        Node->UpdatePinsOffset(SubGraphBorder.Min);
         auto Bound = SubGraph->GetTotalBound();
-        Node->InitPosition(Bound.GetTopLeft() - FVector2D(SubGraphBorder.Left, SubGraphBorder.Top));
-        Node->Size = SubGraph->GetTotalBound().GetSize() + FVector2D(SubGraphBorder.Left + SubGraphBorder.Right, SubGraphBorder.Bottom + SubGraphBorder.Top);
+        Node->InitPosition(Bound.Min - SubGraphBorder.Min);
+        Node->Size = SubGraph->GetTotalBound().GetSize() + FVector2D(SubGraphBorder.Min.X + SubGraphBorder.Max.X, SubGraphBorder.Min.Y + SubGraphBorder.Max.Y);
     }
     if (Nodes.Num() > 0)
     {
@@ -1722,19 +1724,19 @@ void FConnectedGraph::OffsetBy(const FVector2D& InOffset)
     {
         Node->SetPosition(Node->GetPosition() + InOffset);
     }
-    TotalBound = TotalBound.OffsetBy(InOffset);
+    TotalBound = TotalBound.ShiftBy(InOffset);
 }
 
-TMap<UEdGraphNode*, FSlateRect> FConnectedGraph::GetBoundMap()
+TMap<UEdGraphNode*, FBox2D> FConnectedGraph::GetBoundMap()
 {
-    TMap<UEdGraphNode*, FSlateRect> Result;
+    TMap<UEdGraphNode*, FBox2D> Result;
     for (auto Node : Nodes)
     {
         if (Node->OriginalNode == nullptr)
         {
             continue;
         }
-        Result.Add(Node->OriginalNode, FSlateRect::FromPointAndExtent(Node->GetPosition(), Node->Size));
+        Result.Add(Node->OriginalNode, FBox2D(Node->GetPosition(), Node->GetPosition() + Node->Size));
         if (SubGraphs.Contains(Node->Guid))
         {
             Result.Append(SubGraphs[Node->Guid]->GetBoundMap());

@@ -435,22 +435,22 @@ FFastAndSimplePositioningStrategy::FFastAndSimplePositioningStrategy(TArray<TArr
             {
                 if (IsHorizontalDirection)
                 {
-                    *pX = LayersBound[i].GetTopRight().X - Node->Size.X;
+                    *pX = LayersBound[i].Max.X - Node->Size.X;
                 }
                 else
                 {
-                    *pX = LayersBound[i].GetBottomRight().Y - Node->Size.Y;
+                    *pX = LayersBound[i].Max.Y - Node->Size.Y;
                 }
             }
             else
             {
                 if (IsHorizontalDirection)
                 {
-                    *pX = LayersBound[i].GetTopLeft().X;
+                    *pX = LayersBound[i].Min.X;
                 }
                 else
                 {
-                    *pX = LayersBound[i].GetTopRight().Y;
+                    *pX = LayersBound[i].Min.Y;
                 }
             }
             *pY = (*XMap)[Node];
@@ -459,19 +459,19 @@ FFastAndSimplePositioningStrategy::FFastAndSimplePositioningStrategy(TArray<TArr
     }
     const FVector2D NewPosition = FirstNode->GetPosition();
     const FVector2D Offset = OldPosition - NewPosition;
-    FSlateRect Bound;
+    FBox2D Bound(ForceInit);
     for (int32 i = 0; i < InLayeredNodes.Num(); i++)
     {
         for (auto Node : InLayeredNodes[i])
         {
             Node->SetPosition(Node->GetPosition() + Offset);
-            if (Bound.IsValid())
+            if (Bound.bIsValid)
             {
-                Bound = Bound.Expand(FSlateRect::FromPointAndExtent(Node->GetPosition(), Node->Size));
+                Bound += FBox2D(Node->GetPosition(), Node->GetPosition() + Node->Size);
             }
             else
             {
-                Bound = FSlateRect::FromPointAndExtent(Node->GetPosition(), Node->Size);
+                Bound = FBox2D(Node->GetPosition(), Node->GetPosition() + Node->Size);
             }
         }
     }

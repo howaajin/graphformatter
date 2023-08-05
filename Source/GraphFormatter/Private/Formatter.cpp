@@ -554,11 +554,11 @@ void FFormatter::Format()
     {
         auto WidgetNode = GetWidget(Node);
         SGraphPanel::SNode::FNodeSet Filter;
-        WidgetNode->MoveTo(Rect.GetTopLeft(), Filter, true);
+        WidgetNode->MoveTo(Rect.Min, Filter, true);
         if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
         {
             auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
-            CommentNode->SetBounds(Rect);
+            CommentNode->SetBounds(FSlateRect(Rect.Min, Rect.Max));
             if (auto NodeResizable = StaticCast<SGraphNodeResizable*>(WidgetNode))
             {
                 NodeResizable->*FPrivateAccessor<FAccess_SGraphNodeResizable_UserSize>::Member = Rect.GetSize();

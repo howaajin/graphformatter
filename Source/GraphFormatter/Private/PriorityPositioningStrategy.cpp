@@ -123,7 +123,7 @@ static void ShiftInLayer(TArray<FFormatterNode*> Slots, int32 Index, float Dista
     }
 }
 
-static void PositioningSweep(TArray<TArray<FFormatterNode*>>& InLayeredNodes, EEdGraphPinDirection Direction, const TArray<FSlateRect>& LayersBound)
+static void PositioningSweep(TArray<TArray<FFormatterNode*>>& InLayeredNodes, EEdGraphPinDirection Direction, const TArray<FBox2D>& LayersBound)
 {
     int32 StartIndex, EndIndex, Step;
     if (Direction == EGPD_Input)
@@ -160,11 +160,11 @@ static void PositioningSweep(TArray<TArray<FFormatterNode*>>& InLayeredNodes, EE
             const bool IsConnected = GetBarycenter(Node, Direction, Barycenter);
             if (IsConnected)
             {
-                Position = LayersBound[i].GetTopLeft();
+                Position = LayersBound[i].Min;
             }
             else
             {
-                Position = LayersBound[i].GetBottomRight() - FVector2D(Node->Size.X, 0);
+                Position = LayersBound[i].Max - FVector2D(Node->Size.X, 0);
             }
             const int32 Index = CurrentLayer.Find(Node);
             const int32 Previous = Index - 1;
@@ -206,7 +206,7 @@ FPriorityPositioningStrategy::FPriorityPositioningStrategy(TArray<TArray<FFormat
     PositioningSweep(InLayeredNodes, EGPD_Output, LayersBound);
     PositioningSweep(InLayeredNodes, EGPD_Input, LayersBound);
 
-    FSlateRect Bound;
+    FBox2D Bound(ForceInit);
     const FVector2D NewPosition = FirstNode->GetPosition();
     for (int32 i = 0; i < InLayeredNodes.Num(); i++)
     {
@@ -214,13 +214,13 @@ FPriorityPositioningStrategy::FPriorityPositioningStrategy(TArray<TArray<FFormat
         for (auto Node : InLayeredNodes[i])
         {
             Node->SetPosition(Node->GetPosition() + Offset);
-            if (Bound.IsValid())
+            if (Bound.bIsValid)
             {
-                Bound = Bound.Expand(FSlateRect::FromPointAndExtent(Node->GetPosition(), Node->Size));
+                Bound += FBox2D(Node->GetPosition(), Node->GetPosition() + Node->Size);
             }
             else
             {
-                Bound = FSlateRect::FromPointAndExtent(Node->GetPosition(), Node->Size);
+                Bound = FBox2D(Node->GetPosition(), Node->GetPosition() + Node->Size);
             }
         }
     }

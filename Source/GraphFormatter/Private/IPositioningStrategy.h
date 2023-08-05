@@ -13,7 +13,7 @@ class FFormatterNode;
 class IPositioningStrategy
 {
 protected:
-    FSlateRect TotalBound;
+    FBox2D TotalBound = FBox2D(ForceInit);
     TArray<TArray<FFormatterNode*>> LayeredNodes;
 public:
     explicit IPositioningStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes)
@@ -22,5 +22,5 @@ public:
     }
 
     virtual ~IPositioningStrategy() = default;
-    FSlateRect GetTotalBound() const { return TotalBound; }
+    FBox2D GetTotalBound() const { return TotalBound; }
 };

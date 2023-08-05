@@ -94,7 +94,7 @@ class FFormatterGraph
 {
 public:
     static FFormatterGraph* Build(TSet<UEdGraphNode*> Nodes);
-    static TArray<FSlateRect> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true, bool IsParameterGroup = false);
+    static TArray<FBox2D> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true, bool IsParameterGroup = false);
     static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
     static FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment);
     static FFormatterNode* CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group);
@@ -127,20 +127,20 @@ public:
     virtual void Format() { }
     virtual void OffsetBy(const FVector2D& InOffset) { };
     virtual void SetPosition(const FVector2D& Position);
-    virtual TMap<UEdGraphNode*, FSlateRect> GetBoundMap() { return {}; }
-    FSlateRect GetTotalBound() const { return TotalBound; }
+    virtual TMap<UEdGraphNode*, FBox2D> GetBoundMap() { return {}; }
+    FBox2D GetTotalBound() const { return TotalBound; }
     void SetBorder(float Left, float Top, float Right, float Bottom);
-    FSlateRect GetBorder() const;
+    FBox2D GetBorder() const;
 
 protected:
-    FSlateRect TotalBound;
+    FBox2D TotalBound = FBox2D(ForceInit);
     bool IsParameterGroup = false;
     TArray<FFormatterNode*> Nodes;
     TMap<FGuid, FFormatterNode*> NodesMap;
     TMap<FGuid, FFormatterGraph*> SubGraphs;
     TMap<UEdGraphPin*, FFormatterPin*> OriginalPinsMap;
     TMap<FGuid, FFormatterPin*> PinsMap;
-    FSlateRect Border = FSlateRect(0, 0, 0, 0);
+    FBox2D Border = FBox2D(ForceInitToZero);
 };
 
 class FDisconnectedGraph : public FFormatterGraph
@@ -155,7 +155,7 @@ public:
     virtual TSet<UEdGraphNode*> GetOriginalNodes() const override;
     virtual void Format() override;
     virtual void OffsetBy(const FVector2D& InOffset) override;
-    virtual TMap<UEdGraphNode*, FSlateRect> GetBoundMap() override;
+    virtual TMap<UEdGraphNode*, FBox2D> GetBoundMap() override;
 };
 
 class FConnectedGraph : public FFormatterGraph
@@ -166,7 +166,7 @@ public:
     virtual FFormatterGraph* Clone() override;
     void RemoveNode(FFormatterNode* NodeToRemove);
     virtual void Format() override;
-    virtual TMap<UEdGraphNode*, FSlateRect> GetBoundMap() override;
+    virtual TMap<UEdGraphNode*, FBox2D> GetBoundMap() override;
     virtual void OffsetBy(const FVector2D& InOffset) override;
     virtual TMap<UEdGraphPin*, FVector2D> GetPinsOffset() override;
     virtual TArray<FFormatterPin*> GetInputPins() const override;
