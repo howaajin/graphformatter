@@ -1,8 +1,9 @@
 ﻿#include "UEGraphAdapter.h"
 
-#include "EdGraphNode_Comment.h"
 #include "Formatter.h"
 #include "FormatterSettings.h"
+
+#include "EdGraphNode_Comment.h"
 
 FFormatterGraph* UEGraphAdapter::Build(TSet<UEdGraphNode*> Nodes, bool InIsVerticalLayout, bool InIsParameterGroup)
 {
@@ -137,7 +138,7 @@ bool UEGraphAdapter::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNo
     {
         for (auto Pin : Node->Pins)
         {
-            if (FFormatter::Instance().IsBlueprint && !FFormatter::Instance().IsExecPin(Pin))
+            if (FFormatter::Instance().IsBlueprint && !IsExecPin(Pin))
             {
                 continue;
             }
@@ -171,7 +172,7 @@ bool UEGraphAdapter::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNo
     }
 }
 
-TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded)
+TSet<UEdGraphNode*> UEGraphAdapter::FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded)
 {
     TSet<UEdGraphNode*> VisitedNodes;
     TArray<UEdGraphNode*> Stack;
@@ -182,7 +183,7 @@ TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEd
         VisitedNodes.Add(StackNode);
         for (auto Pin : StackNode->Pins)
         {
-            if (Pin->Direction != EGPD_Input || FFormatter::IsExecPin(Pin))
+            if (Pin->Direction != EGPD_Input || IsExecPin(Pin))
             {
                 continue;
             }
@@ -192,7 +193,7 @@ TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEd
                 if (!Included.Contains(LinkedNode) ||
                     VisitedNodes.Contains(LinkedNode) ||
                     Excluded.Contains(LinkedNode) ||
-                    FFormatter::HasExecPin(LinkedNode))
+                    HasExecPin(LinkedNode))
                 {
                     continue;
                 }
@@ -243,7 +244,7 @@ void UEGraphAdapter::BuildNodes(FFormatterGraph* Graph, TSet<UEdGraphNode*> Sele
         TArray<UEdGraphNode*> ExecNodes;
         for (auto Node : SelectedNodes)
         {
-            if (FFormatter::HasExecPin(Node))
+            if (HasExecPin(Node))
             {
                 ExecNodes.Add(Node);
             }
@@ -391,6 +392,23 @@ TArray<TSet<UEdGraphNode*>> UEGraphAdapter::FindIsolated(const TArray<FFormatter
         }
     }
     return Result;
+}
+
+bool UEGraphAdapter::IsExecPin(const UEdGraphPin* Pin)
+{
+    return Pin->PinType.PinCategory == "Exec";
+}
+
+bool UEGraphAdapter::HasExecPin(const UEdGraphNode* Node)
+{
+    for (auto Pin : Node->Pins)
+    {
+        if (IsExecPin(Pin))
+        {
+            return true;
+        }
+    }
+    return false;
 }
 
 FFormatterNode* UEGraphAdapter::FormatterNodeFromUEGraphNode(UEdGraphNode* InNode)

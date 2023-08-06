@@ -17,7 +17,6 @@
 #include "SGraphPanel.h"
 
 #include "graph_layout/graph_layout.h"
-#include <algorithm>
 using namespace graph_layout;
 
 /** Hack start. Access to private member legally. */
@@ -269,23 +268,6 @@ FSlateRect FFormatter::GetNodesBound(const TSet<UEdGraphNode*> Nodes) const
     return Bound;
 }
 
-bool FFormatter::IsExecPin(const UEdGraphPin* Pin)
-{
-    return Pin->PinType.PinCategory == "Exec";
-}
-
-bool FFormatter::HasExecPin(const UEdGraphNode* Node)
-{
-    for (auto Pin : Node->Pins)
-    {
-        if (IsExecPin(Pin))
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
 bool FFormatter::PreCommand()
 {
     if (!CurrentEditor)
@@ -307,7 +289,7 @@ bool FFormatter::PreCommand()
     const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
     FFormatterGraph::HorizontalSpacing = Settings->HorizontalSpacing;
     FFormatterGraph::VerticalSpacing = Settings->VerticalSpacing;
-    FFormatterGraph::SpacingFactorOfParameterGroup = Settings->SpacingFactorOfParameterGroup;
+    FFormatterGraph::SpacingFactorOfGroup = Settings->SpacingFactorOfParameterGroup;
     FFormatterGraph::MaxLayerNodes = Settings->MaxLayerNodes;
     FFormatterGraph::MaxOrderingIterations = Settings->MaxOrderingIterations;
     FFormatterGraph::PositioningAlgorithm = Settings->PositioningAlgorithm;
@@ -413,7 +395,7 @@ static TMap<UEdGraphNode*, UEdGraphNode_Comment*> NodeUnderCommentHash()
     TSet<UEdGraphNode*> Nodes = FFormatter::Instance().GetAllNodes();
     while (true)
     {
-        TArray<UEdGraphNode_Comment*> SortedCommentNodes = FFormatter::GetSortedCommentNodes(Nodes);
+        TArray<UEdGraphNode_Comment*> SortedCommentNodes = UEGraphAdapter::GetSortedCommentNodes(Nodes);
         if (SortedCommentNodes.Num() != 0)
         {
             // Topmost comment node has smallest negative depth value
@@ -640,262 +622,6 @@ FFormatter& FFormatter::Instance()
 {
     static FFormatter Context;
     return Context;
-}
-
-TArray<UEdGraphNode_Comment*> FFormatter::GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes)
-{
-    TArray<UEdGraphNode_Comment*> CommentNodes;
-    for (auto Node : SelectedNodes)
-    {
-        if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
-        {
-            auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
-            CommentNodes.Add(CommentNode);
-        }
-    }
-    CommentNodes.Sort([](const UEdGraphNode_Comment& A, const UEdGraphNode_Comment& B)
-    {
-        return A.CommentDepth < B.CommentDepth;
-    });
-    return CommentNodes;
-}
-
-graph_t* FFormatter::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment)
-{
-    if (NodesUnderComment.Num() > 0)
-    {
-        auto SubGraph = BuildGraph(NodesUnderComment);
-        float BorderHeight = Instance().GetCommentNodeTitleHeight(CommentNode);
-        const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-        SubGraph->border = rect_t{(float)Settings.CommentBorder, BorderHeight + Settings.CommentBorder, (float)Settings.CommentBorder, (float)Settings.CommentBorder};
-        return SubGraph;
-    }
-    return nullptr;
-}
-
-graph_t* FFormatter::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group)
-{
-    auto SubGraph = BuildGraph(Group, true);
-    SubGraph->border = rect_t{0, 0, 0, 0};
-    return SubGraph;
-}
-
-TSet<UEdGraphNode*> FFormatter::FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded)
-{
-    TSet<UEdGraphNode*> VisitedNodes;
-    TArray<UEdGraphNode*> Stack;
-    Stack.Push(Node);
-    while (!Stack.IsEmpty())
-    {
-        auto StackNode = Stack.Pop();
-        VisitedNodes.Add(StackNode);
-        for (auto Pin : StackNode->Pins)
-        {
-            if (Pin->Direction != EGPD_Input || IsExecPin(Pin))
-            {
-                continue;
-            }
-            for (auto LinkedPin : Pin->LinkedTo)
-            {
-                auto LinkedNode = LinkedPin->GetOwningNodeUnchecked();
-                if (!Included.Contains(LinkedNode) ||
-                    VisitedNodes.Contains(LinkedNode) ||
-                    Excluded.Contains(LinkedNode) ||
-                    HasExecPin(LinkedNode))
-                {
-                    continue;
-                }
-                Stack.Add(LinkedNode);
-            }
-        }
-    }
-    return VisitedNodes;
-}
-
-void FFormatter::BuildEdgeForNode(graph_t* Graph, node_t* Node, TSet<UEdGraphNode*> SelectedNodes)
-{
-    if (Node->graph)
-    {
-        const std::set<void*>& InnerSelectedNodes = Node->graph->get_user_pointers();
-        for (auto SelectedNode : InnerSelectedNodes)
-        {
-            for (auto Pin : static_cast<UEdGraphNode*>(SelectedNode)->Pins)
-            {
-                for (auto LinkedToPin : Pin->LinkedTo)
-                {
-                    const auto LinkedToNode = LinkedToPin->GetOwningNodeUnchecked();
-                    if (InnerSelectedNodes.find(LinkedToNode) != InnerSelectedNodes.end() || !SelectedNodes.Contains(LinkedToNode))
-                    {
-                        continue;
-                    }
-                    pin_t* Tail = Graph->user_ptr_to_pin[Pin];
-                    pin_t* Head = Graph->user_ptr_to_pin[LinkedToPin];
-                    if (Pin->Direction == EGPD_Input)
-                    {
-                        std::swap(Tail, Head);
-                    }
-                    Graph->add_edge(Tail, Head);
-                }
-            }
-        }
-    }
-    else
-    {
-        UEdGraphNode* OriginalNode = static_cast<UEdGraphNode*>(Node->user_ptr);
-        for (auto Pin : OriginalNode->Pins)
-        {
-            for (auto LinkedToPin : Pin->LinkedTo)
-            {
-                const auto LinkedToNode = LinkedToPin->GetOwningNodeUnchecked();
-                if (!SelectedNodes.Contains(LinkedToNode))
-                {
-                    continue;
-                }
-                pin_t* Tail = Graph->user_ptr_to_pin[Pin];
-                pin_t* Head = Graph->user_ptr_to_pin[LinkedToPin];
-                if (Pin->Direction == EGPD_Input)
-                {
-                    std::swap(Tail, Head);
-                }
-                Graph->add_edge(Tail, Head);
-            }
-        }
-    }
-}
-
-TMap<UEdGraphNode*, FSlateRect> FFormatter::GetBoundMap(graph_layout::graph_t* Graph)
-{
-    auto Bounds = Graph->get_bounds();
-    TMap<UEdGraphNode*, FSlateRect> Result;
-    for (auto [Node, Rect] : Bounds)
-    {
-        Result.Add((UEdGraphNode*)Node->user_ptr, FSlateRect(Rect.l, Rect.t, Rect.r, Rect.b));
-    }
-    return Result;
-}
-
-void FFormatter::BuildNodes(graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
-{
-    while (true)
-    {
-        TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(Nodes);
-        if (SortedCommentNodes.Num() != 0)
-        {
-            // Topmost comment node has smallest negative depth value
-            const int32 Depth = SortedCommentNodes[0]->CommentDepth;
-
-            // Collapse all topmost comment nodes into virtual nodes.
-            for (auto CommentNode : SortedCommentNodes)
-            {
-                if (CommentNode->CommentDepth == Depth)
-                {
-                    auto NodesUnderComment = Instance().GetNodesUnderComment(Cast<UEdGraphNode_Comment>(CommentNode));
-                    NodesUnderComment = Nodes.Intersect(NodesUnderComment);
-                    Nodes = Nodes.Difference(NodesUnderComment);
-                    graph_t* SubGraph = CollapseCommentNode(CommentNode, NodesUnderComment);
-                    AddNode(Graph, CommentNode, SubGraph);
-                    Nodes.Remove(CommentNode);
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    if (Instance().IsBlueprint && !IsParameterGroup && Settings.bEnableBlueprintParameterGroup)
-    {
-        TArray<UEdGraphNode*> ExecNodes;
-        for (auto Node : Nodes)
-        {
-            if (HasExecPin(Node))
-            {
-                ExecNodes.Add(Node);
-            }
-        }
-        for (auto Node : ExecNodes)
-        {
-            TSet<UEdGraphNode*> Group;
-            TSet<UEdGraphNode*> Excluded;
-            Group = FindParamGroupForExecNode(Node, Nodes, Excluded);
-            if (Group.Num() >= 2)
-            {
-                graph_t* SubGraph = CollapseGroup(Node, Group);
-                AddNode(Graph, Node, SubGraph);
-                Nodes = Nodes.Difference(Group);
-            }
-        }
-    }
-    for (auto Node : Nodes)
-    {
-        AddNode(Graph, Node, nullptr);
-    }
-}
-
-void FFormatter::BuildEdges(graph_layout::graph_t* Graph, TSet<UEdGraphNode*> SelectedNodes)
-{
-    for (auto node : Graph->nodes)
-    {
-        BuildEdgeForNode(Graph, node, SelectedNodes);
-    }
-    auto Comparer = [](const node_t* A, const node_t* B)
-    {
-        return A->position.y < B->position.y;
-    };
-    std::sort(Graph->nodes.begin(), Graph->nodes.end(), Comparer);
-}
-
-graph_t* FFormatter::BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup)
-{
-    graph_t* Graph = new graph_t;
-    BuildNodes(Graph, Nodes, true);
-    BuildEdges(Graph, Nodes);
-
-    graph_t* RealGraph = Graph->to_connected_or_disconnected();
-    delete Graph;
-
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    RealGraph->spacing = vector2_t{(float)Settings.HorizontalSpacing, (float)Settings.VerticalSpacing};
-    return RealGraph;
-}
-
-void FFormatter::AddNode(graph_t* Graph, UEdGraphNode* Node, graph_t* SubGraph)
-{
-    node_t* n = Graph->add_node(SubGraph);
-    n->user_ptr = Node;
-    FVector2D Size = Instance().GetNodeSize(Node);
-    n->size = vector2_t{(float)Size.X, (float)Size.Y};
-    if (SubGraph)
-    {
-        auto NodePointers = SubGraph->get_user_pointers();
-        for (auto NodePtr : NodePointers)
-        {
-            auto SubNode = (UEdGraphNode*)NodePtr;
-            for (auto Pin : SubNode->Pins)
-            {
-                pin_t* p = n->add_pin(Pin->Direction == EGPD_Input ? pin_type_t::in : pin_type_t::out);
-                p->user_pointer = Pin;
-                Graph->user_ptr_to_pin[Pin] = p;
-            }
-        }
-    }
-    else
-    {
-        for (auto Pin : Node->Pins)
-        {
-            pin_t* p = n->add_pin(Pin->Direction == EGPD_Input ? pin_type_t::in : pin_type_t::out);
-            FVector2D Offset = Instance().GetPinOffset(Pin);
-            p->offset = vector2_t{(float)Offset.X, (float)Offset.Y};
-            p->user_pointer = Pin;
-            Graph->user_ptr_to_pin[Pin] = p;
-        }
-    }
 }
 
 FFormatter::FFormatter()

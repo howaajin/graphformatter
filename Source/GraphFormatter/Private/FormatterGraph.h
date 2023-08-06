@@ -59,8 +59,8 @@ public:
     static int32 CalculateCrossing(const TArray<TArray<FFormatterNode*>>& Order);
 
     FGuid Guid;
-    void* OriginalNode;
-    FFormatterGraph* SubGraph;
+    void* OriginalNode = nullptr;
+    FFormatterGraph* SubGraph = nullptr;
     FVector2D Size;
     TArray<FFormatterEdge*> InEdges;
     TArray<FFormatterEdge*> OutEdges;
@@ -112,7 +112,7 @@ public:
     static TArray<FBox2D> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true, bool IsParameterGroup = false);
     inline static int32 HorizontalSpacing;
     inline static int32 VerticalSpacing;
-    inline static FVector2D SpacingFactorOfParameterGroup;
+    inline static FVector2D SpacingFactorOfGroup;
     inline static int32 MaxLayerNodes;
     inline static int32 MaxOrderingIterations;
     inline static EGraphFormatterPositioningAlgorithm PositioningAlgorithm;
@@ -158,7 +158,7 @@ protected:
     TMap<FGuid, FFormatterPin*> PinsMap;
     
     FBox2D TotalBound = FBox2D(ForceInit);
-    FBox2D Border = FBox2D(ForceInitToZero);
+    FBox2D Border = {FVector2D(ForceInitToZero), FVector2D(ForceInitToZero)};
     bool IsParameterGroup = false;
     bool IsVerticalLayout = false;
 };
@@ -193,7 +193,6 @@ public:
     virtual TArray<FFormatterPin*> GetInputPins() const override;
     virtual TArray<FFormatterPin*> GetOutputPins() const override;
     virtual TSet<void*> GetOriginalNodes() const override;
-
 
 private:
     

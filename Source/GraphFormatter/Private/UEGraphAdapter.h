@@ -19,6 +19,10 @@ public:
     static void BuildNodesAndEdges(FFormatterGraph* Graph, TArray<FFormatterNode*>& Nodes, TMap<void*, FFormatterPin*>& PinsMap, const TSet<UEdGraphNode*>& SelectedNodes);
     static TArray<FFormatterEdge> GetEdgeForNode(FFormatterNode* Node, TMap<void*, FFormatterPin*>& PinsMap, TSet<UEdGraphNode*> SelectedNodes);
     static TArray<TSet<UEdGraphNode*>> FindIsolated(const TArray<FFormatterNode*>& Nodes);
+    static TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded);
+
+    static bool IsExecPin(const UEdGraphPin* Pin);
+    static bool HasExecPin(const UEdGraphNode* Node);
 
     static FFormatterNode* FormatterNodeFromUEGraphNode(UEdGraphNode* InNode);
     static FConnectedGraph* BuildConnectedGraph(const TSet<UEdGraphNode*>& SelectedNodes, bool InIsVerticalLayout = false, bool InIsParameterGroup = false);

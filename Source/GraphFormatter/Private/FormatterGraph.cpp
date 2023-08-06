@@ -58,8 +58,6 @@ FFormatterNode::FFormatterNode(const FFormatterNode& Other)
 
 FFormatterNode::FFormatterNode()
     : Guid(FGuid::NewGuid())
-    , OriginalNode(nullptr)
-    , SubGraph(nullptr)
     , Size(FVector2D(1, 1))
     , PathDepth(0)
     , PositioningPriority(INT_MAX)
@@ -622,21 +620,14 @@ TArray<FBox2D> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNod
     if (IsHorizontalDirection)
     {
         Spacing = FVector2D(HorizontalSpacing, 0);
-        if (IsParameterGroup)
-        {
-            Spacing *= SpacingFactorOfParameterGroup.X;
-        }
     }
     else
     {
         Spacing = FVector2D(0, VerticalSpacing);
-        if (IsParameterGroup)
-        {
-            if (IsParameterGroup)
-            {
-                Spacing *= SpacingFactorOfParameterGroup.X;
-            }
-        }
+    }
+    if (IsParameterGroup)
+    {
+        Spacing *= SpacingFactorOfGroup.X;
     }
     for (int32 i = 0; i < InLayeredNodes.Num(); i++)
     {
@@ -1075,7 +1066,7 @@ int32 FFormatterNode::CalculateCrossing(const TArray<TArray<FFormatterNode*>>& O
     {
         const auto& UpperLayer = Order[i - 1];
         const auto& LowerLayer = Order[i];
-        TArray<FFormatterEdge*> NodeEdges = FFormatterNode::GetEdgeBetweenTwoLayer(LowerLayer, UpperLayer);
+        TArray<FFormatterEdge*> NodeEdges = GetEdgeBetweenTwoLayer(LowerLayer, UpperLayer);
         while (NodeEdges.Num() != 0)
         {
             const auto Edge1 = NodeEdges.Pop();
