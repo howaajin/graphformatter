@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-#include "FormatterModule.h"
 #include "CoreMinimal.h"
 #include "EdGraph/EdGraph.h"
 #include "Editor.h"
@@ -23,11 +22,12 @@
 
 #define LOCTEXT_NAMESPACE "GraphFormatter"
 
-class FFormatterModule : public IGraphFormatterModule
+class FFormatterModule : public IModuleInterface
 {
     virtual void StartupModule() override;
     virtual void ShutdownModule() override;
-    virtual void FormatGraphAutomated(TObjectPtr<UObject> Object) override;
+    
+    virtual void FormatGraphAutomated(TObjectPtr<UObject> Object);
 
     void HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance);
     void HandleEditorWidgetCreated(UObject* Object);
