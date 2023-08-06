@@ -303,6 +303,14 @@ bool FFormatter::PreCommand()
         return false;
     }
     SetZoomLevelTo11Scale();
+
+    const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+    FFormatterGraph::HorizontalSpacing = Settings->HorizontalSpacing;
+    FFormatterGraph::VerticalSpacing = Settings->VerticalSpacing;
+    FFormatterGraph::SpacingFactorOfParameterGroup = Settings->SpacingFactorOfParameterGroup;
+    FFormatterGraph::MaxLayerNodes = Settings->MaxLayerNodes;
+    FFormatterGraph::MaxOrderingIterations = Settings->MaxOrderingIterations;
+    FFormatterGraph::PositioningAlgorithm = Settings->PositioningAlgorithm;
     return true;
 }
 

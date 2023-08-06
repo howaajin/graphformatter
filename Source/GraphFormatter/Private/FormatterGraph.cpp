@@ -5,8 +5,6 @@
 
 #include "FormatterGraph.h"
 
-#include "FormatterSettings.h"
-
 #include "EvenlyPlaceStrategy.h"
 #include "FastAndSimplePositioningStrategy.h"
 #include "PriorityPositioningStrategy.h"
@@ -619,25 +617,24 @@ FFormatterNode* FConnectedGraph::FindMaxInOutWeightDiffNode() const
 TArray<FBox2D> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection, bool IsParameterGroup)
 {
     TArray<FBox2D> LayersBound;
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
     FBox2D TotalBound(ForceInit);
     FVector2D Spacing;
     if (IsHorizontalDirection)
     {
-        Spacing = FVector2D(Settings.HorizontalSpacing, 0);
+        Spacing = FVector2D(HorizontalSpacing, 0);
         if (IsParameterGroup)
         {
-            Spacing *= Settings.SpacingFactorOfParameterGroup.X;
+            Spacing *= SpacingFactorOfParameterGroup.X;
         }
     }
     else
     {
-        Spacing = FVector2D(0, Settings.VerticalSpacing);
+        Spacing = FVector2D(0, VerticalSpacing);
         if (IsParameterGroup)
         {
             if (IsParameterGroup)
             {
-                Spacing *= Settings.SpacingFactorOfParameterGroup.X;
+                Spacing *= SpacingFactorOfParameterGroup.X;
             }
         }
     }
@@ -850,7 +847,6 @@ TSet<void*> FDisconnectedGraph::GetOriginalNodes() const
 
 void FDisconnectedGraph::Format()
 {
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
     FBox2D PreBound(ForceInit);
     for (auto Graph : ConnectedGraphs)
     {
@@ -873,7 +869,7 @@ void FDisconnectedGraph::Format()
             TotalBound = Bound;
         }
 
-        FVector2D Offset = IsVerticalLayout ? FVector2D(Settings.VerticalSpacing, 0) : FVector2D(0, Settings.VerticalSpacing);
+        FVector2D Offset = IsVerticalLayout ? FVector2D(VerticalSpacing, 0) : FVector2D(0, VerticalSpacing);
         PreBound = TotalBound.ShiftBy(Offset);
     }
 }
@@ -974,14 +970,13 @@ void FConnectedGraph::DoLayering()
         }
         Set.Append(Layer);
         TArray<FFormatterNode*> Array = Layer.Array();
-        const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
-        if (Settings->MaxLayerNodes)
+        if (MaxLayerNodes)
         {
             TArray<FFormatterNode*> SubLayer;
             for (int j = 0; j != Array.Num(); j++)
             {
                 SubLayer.Add(Array[j]);
-                if (SubLayer.Num() == Settings->MaxLayerNodes || j == Array.Num() - 1)
+                if (SubLayer.Num() == MaxLayerNodes || j == Array.Num() - 1)
                 {
                     if (NodeComparer)
                     {
@@ -1098,11 +1093,10 @@ int32 FFormatterNode::CalculateCrossing(const TArray<TArray<FFormatterNode*>>& O
 
 void FConnectedGraph::DoOrderingSweep()
 {
-    const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
     auto Best = LayeredList;
     auto Order = LayeredList;
     int32 BestCrossing = INT_MAX;
-    for (int i = 0; i < Settings->MaxOrderingIterations; i++)
+    for (int i = 0; i < MaxOrderingIterations; i++)
     {
         SortInLayer(Order, i % 2 == 0 ? EGPD_Input : EGPD_Output);
         const int32 NewCrossing = FFormatterNode::CalculateCrossing(Order);
@@ -1117,8 +1111,6 @@ void FConnectedGraph::DoOrderingSweep()
 
 void FConnectedGraph::DoPositioning()
 {
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-
     if (IsVerticalLayout)
     {
         FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, false, IsParameterGroup);
@@ -1126,17 +1118,17 @@ void FConnectedGraph::DoPositioning()
         return;
     }
 
-    if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)
+    if (PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)
     {
         FEvenlyPlaceStrategy LeftToRightPositioningStrategy(LayeredList);
         TotalBound = LeftToRightPositioningStrategy.GetTotalBound();
     }
-    else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
+    else if (PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
     {
         FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, true, IsParameterGroup);
         TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
     }
-    else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::ELayerSweep)
+    else if (PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::ELayerSweep)
     {
         FPriorityPositioningStrategy PriorityPositioningStrategy(LayeredList);
         TotalBound = PriorityPositioningStrategy.GetTotalBound();

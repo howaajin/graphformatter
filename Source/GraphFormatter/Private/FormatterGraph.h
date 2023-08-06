@@ -11,6 +11,15 @@ class FConnectedGraph;
 class FFormatterNode;
 class FFormatterGraph;
 
+UENUM()
+enum class EGraphFormatterPositioningAlgorithm
+{
+    EEvenlyInLayer UMETA(DisplayName = "Place node evenly in layer"),
+    EFastAndSimpleMethodTop UMETA(DisplayName = "FAS Top"),
+    EFastAndSimpleMethodMedian UMETA(DisplayName = "FAS Median"),
+    ELayerSweep UMETA(DisplayName = "Layer sweep"),
+};
+
 enum class EFormatterPinDirection : int
 {
     In,
@@ -101,6 +110,12 @@ class FFormatterGraph
 {
 public:
     static TArray<FBox2D> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true, bool IsParameterGroup = false);
+    inline static int32 HorizontalSpacing;
+    inline static int32 VerticalSpacing;
+    inline static FVector2D SpacingFactorOfParameterGroup;
+    inline static int32 MaxLayerNodes;
+    inline static int32 MaxOrderingIterations;
+    inline static EGraphFormatterPositioningAlgorithm PositioningAlgorithm;
 
     FFormatterGraph(const FFormatterGraph& Other);
     virtual ~FFormatterGraph();
