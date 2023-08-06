@@ -7,6 +7,7 @@
 #include "FormatterCommands.h"
 #include "FormatterGraph.h"
 #include "FormatterSettings.h"
+#include "UEGraphAdapter.h"
 #include "FormatterLog.h"
 
 #include "BehaviorTree/BehaviorTree.h"
@@ -541,23 +542,27 @@ void FFormatter::Format()
     {
         CurrentEditor->SetNodeSelection(SelectedNode, true);
     }
-    auto Graph = FFormatterGraph::Build(SelectedNodes);
+    auto Graph = UEGraphAdapter::Build(SelectedNodes, IsVerticalLayout);
+    if (IsBehaviorTree)
+    {
+        Graph->NodeComparer = [](const FFormatterNode& A, const FFormatterNode& B)
+        {
+            return A.GetPosition().X < B.GetPosition().X;
+        };
+    }
     Graph->Format();
     auto BoundMap = Graph->GetBoundMap();
     delete Graph;
-    //auto Graph = BuildGraph(SelectedNodes);
-    //Graph->arrange();
-    //auto BoundMap = GetBoundMap(Graph);
-    //delete Graph;
     const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
     for (auto [Node, Rect] : BoundMap)
     {
-        auto WidgetNode = GetWidget(Node);
+        UEdGraphNode* UEdNode = reinterpret_cast<UEdGraphNode*>(Node);
+        auto WidgetNode = GetWidget(UEdNode);
         SGraphPanel::SNode::FNodeSet Filter;
         WidgetNode->MoveTo(Rect.Min, Filter, true);
-        if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
+        if (UEdNode->IsA(UEdGraphNode_Comment::StaticClass()))
         {
-            auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
+            auto CommentNode = Cast<UEdGraphNode_Comment>(UEdNode);
             CommentNode->SetBounds(FSlateRect(Rect.Min, Rect.Max));
             if (auto NodeResizable = StaticCast<SGraphNodeResizable*>(WidgetNode))
             {
@@ -575,11 +580,11 @@ void FFormatter::PlaceBlock()
         return;
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
-    auto ConnectedNodesLeft = FFormatterGraph::GetNodesConnected(SelectedNodes, FFormatterGraph::EInOutOption::EIOO_IN);
+    auto ConnectedNodesLeft = UEGraphAdapter::GetNodesConnected(SelectedNodes, EInOutOption::EIOO_IN);
     FVector2D ConnectCenter;
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
     const FScopedTransaction Transaction(FFormatterCommands::Get().PlaceBlock->GetLabel());
-    if (FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_IN))
+    if (UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EInOutOption::EIOO_IN))
     {
         auto Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
         auto Direction = IsVerticalLayout ? FVector(0, 1, 0) : FVector(1, 0, 0);
@@ -588,7 +593,7 @@ void FFormatter::PlaceBlock()
         auto RightBound = IsVerticalLayout ? FVector(0, Bound.Bottom, 0) : FVector(Bound.Right, 0, 0);
         auto LinkedCenter3D = RightRay.PointAt(RightRay.GetParameter(RightBound));
         auto LinkedCenterTo = FVector2D(LinkedCenter3D) + (IsVerticalLayout ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
-        FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_IN, true);
+        UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EInOutOption::EIOO_IN, true);
         Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
         Direction = IsVerticalLayout ? FVector(0, -1, 0) : FVector(-1, 0, 0);
         auto LeftRay = FRay(Center, Direction, true);
@@ -599,8 +604,8 @@ void FFormatter::PlaceBlock()
         FVector2D Offset = LinkedCenterTo - LinkedCenterFrom;
         Translate(SelectedNodes, Offset);
     }
-    auto ConnectedNodesRight = FFormatterGraph::GetNodesConnected(SelectedNodes, FFormatterGraph::EInOutOption::EIOO_OUT);
-    if (FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_OUT))
+    auto ConnectedNodesRight = UEGraphAdapter::GetNodesConnected(SelectedNodes, EInOutOption::EIOO_OUT);
+    if (UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EInOutOption::EIOO_OUT))
     {
         auto Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
         auto Direction = IsVerticalLayout ? FVector(0, -1, 0) : FVector(-1, 0, 0);
@@ -609,7 +614,7 @@ void FFormatter::PlaceBlock()
         auto LeftBound = IsVerticalLayout ? FVector(0, Bound.Top, 0) : FVector(Bound.Left, 0, 0);
         auto LinkedCenter3D = LeftRay.PointAt(LeftRay.GetParameter(LeftBound));
         auto LinkedCenterTo = FVector2D(LinkedCenter3D) - (IsVerticalLayout ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
-        FFormatterGraph::GetNodesConnectCenter(SelectedNodes, ConnectCenter, FFormatterGraph::EInOutOption::EIOO_OUT, true);
+        UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EInOutOption::EIOO_OUT, true);
         Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
         Direction = IsVerticalLayout ? FVector(0, 1, 0) : FVector(1, 0, 0);
         auto RightRay = FRay(Center, Direction, true);

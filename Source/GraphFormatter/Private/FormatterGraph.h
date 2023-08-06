@@ -6,23 +6,16 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Formatter.h"
-#include "EdGraph/EdGraph.h"
-#include "Layout/SlateRect.h"
 
-class IPositioningStrategy;
 class FConnectedGraph;
 class FFormatterNode;
 class FFormatterGraph;
-
-class UEdGraphNode;
-class UEdGraphNode_Comment;
 
 class FFormatterPin
 {
 public:
     FGuid Guid;
-    UEdGraphPin* OriginalPin{nullptr};
+    void* OriginalPin{nullptr};
     EEdGraphPinDirection Direction{EGPD_Input};
     FFormatterNode* OwningNode{nullptr};
     FVector2D NodeOffset;
@@ -36,14 +29,21 @@ public:
     FFormatterPin* To;
     float Weight = 1;
     bool IsCrossing(const FFormatterEdge* Edge) const;
-    bool IsInnerSegment();
+    bool IsInnerSegment() const;
 };
 
 class FFormatterNode
 {
 public:
+    static FFormatterNode* CreateDummy();
+    static TArray<FFormatterEdge*> GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode = nullptr);
+    static TArray<FFormatterNode*> GetSuccessorsForNodes(TSet<FFormatterNode*> Nodes);
+    static void CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer);
+    static void CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order);
+    static int32 CalculateCrossing(const TArray<TArray<FFormatterNode*>>& Order);
+
     FGuid Guid;
-    UEdGraphNode* OriginalNode;
+    void* OriginalNode;
     FFormatterGraph* SubGraph;
     FVector2D Size;
     TArray<FFormatterEdge*> InEdges;
@@ -52,10 +52,9 @@ public:
     TArray<FFormatterPin*> OutPins;
     int32 PathDepth;
     int32 PositioningPriority;
-    FFormatterNode(UEdGraphNode* InNode);
     FFormatterNode(const FFormatterNode& Other);
     FFormatterNode();
-    static FFormatterNode* CreateDummy();
+
     ~FFormatterNode();
     void Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin, float Weight = 1);
     void Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetPin);
@@ -85,103 +84,104 @@ public:
     void SetSubGraph(FFormatterGraph* InSubGraph);
     void UpdatePinsOffset(FVector2D Border);
     friend class FConnectedGraph;
+
 private:
     float OrderValue{0.0f};
     FVector2D Position;
 };
 
+enum class EInOutOption
+{
+    EIOO_ALL,
+    EIOO_IN,
+    EIOO_OUT
+};
+
 class FFormatterGraph
 {
 public:
-    static FFormatterGraph* Build(TSet<UEdGraphNode*> Nodes);
     static TArray<FBox2D> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true, bool IsParameterGroup = false);
-    static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
-    static FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment);
-    static FFormatterNode* CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group);
-    enum class EInOutOption
-    {
-        EIOO_ALL,
-        EIOO_IN,
-        EIOO_OUT
-    };
-    static TSet<UEdGraphNode*> GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
-    static TSet<UEdGraphNode*> GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
-    static bool GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EInOutOption Option, bool bInvert = false);
 
     FFormatterGraph(const FFormatterGraph& Other);
     virtual ~FFormatterGraph();
     virtual FFormatterGraph* Clone();
 
-    explicit FFormatterGraph(bool InIsParameterGroup = false);
-    void BuildNodes(TSet<UEdGraphNode*> SelectedNodes);
-    void BuildEdges(TSet<UEdGraphNode*> SelectedNodes);
-    void BuildNodesAndEdges(TSet<UEdGraphNode*> SelectedNodes);
+    explicit FFormatterGraph(bool InIsVerticalLayout = false, bool InIsParameterGroup = false);
 
-    TArray<FFormatterEdge> GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes);
-    TArray<TSet<UEdGraphNode*>> FindIsolated();
     void AddNode(FFormatterNode* InNode);
-    virtual TMap<UEdGraphPin*, FVector2D> GetPinsOffset() { return {}; }
+
+    virtual TMap<void*, FVector2D> GetPinsOffset() { return {}; }
+
     virtual TArray<FFormatterPin*> GetInputPins() const { return {}; }
+
     virtual TArray<FFormatterPin*> GetOutputPins() const { return {}; }
-    virtual TSet<UEdGraphNode*> GetOriginalNodes() const { return {}; }
+
+    virtual TSet<void*> GetOriginalNodes() const { return {}; }
+
     virtual void Format() { }
-    virtual void OffsetBy(const FVector2D& InOffset) { };
+    
+    virtual void OffsetBy(const FVector2D& InOffset) { }
     virtual void SetPosition(const FVector2D& Position);
-    virtual TMap<UEdGraphNode*, FBox2D> GetBoundMap() { return {}; }
+
+    virtual TMap<void*, FBox2D> GetBoundMap() { return {}; }
+
     FBox2D GetTotalBound() const { return TotalBound; }
+
     void SetBorder(float Left, float Top, float Right, float Bottom);
     FBox2D GetBorder() const;
+    void SetIsParameterGroup(bool InIsParameterGroup);
+    bool GetIsParameterGroup() const;
+    bool GetIsVerticalLayout() const;
+    void SetIsVerticalLayout(bool InIsVerticalLayout);
+    bool (*NodeComparer)(const FFormatterNode& A, const FFormatterNode& B) = nullptr;
+    TMap<void*, FFormatterPin*> OriginalPinsMap;
+    TArray<FFormatterNode*> Nodes;
 
 protected:
-    FBox2D TotalBound = FBox2D(ForceInit);
-    bool IsParameterGroup = false;
-    TArray<FFormatterNode*> Nodes;
     TMap<FGuid, FFormatterNode*> NodesMap;
     TMap<FGuid, FFormatterGraph*> SubGraphs;
-    TMap<UEdGraphPin*, FFormatterPin*> OriginalPinsMap;
     TMap<FGuid, FFormatterPin*> PinsMap;
+    
+    FBox2D TotalBound = FBox2D(ForceInit);
     FBox2D Border = FBox2D(ForceInitToZero);
+    bool IsParameterGroup = false;
+    bool IsVerticalLayout = false;
 };
 
 class FDisconnectedGraph : public FFormatterGraph
 {
     TArray<FFormatterGraph*> ConnectedGraphs;
+
 public:
     void AddGraph(FFormatterGraph* Graph);
     virtual ~FDisconnectedGraph() override;
-    virtual TMap<UEdGraphPin*, FVector2D> GetPinsOffset() override;
+    virtual TMap<void*, FVector2D> GetPinsOffset() override;
     virtual TArray<FFormatterPin*> GetInputPins() const override;
     virtual TArray<FFormatterPin*> GetOutputPins() const override;
-    virtual TSet<UEdGraphNode*> GetOriginalNodes() const override;
+    virtual TSet<void*> GetOriginalNodes() const override;
     virtual void Format() override;
     virtual void OffsetBy(const FVector2D& InOffset) override;
-    virtual TMap<UEdGraphNode*, FBox2D> GetBoundMap() override;
+    virtual TMap<void*, FBox2D> GetBoundMap() override;
 };
 
 class FConnectedGraph : public FFormatterGraph
 {
 public:
-    FConnectedGraph(const TSet<UEdGraphNode*>& SelectedNodes, bool InIsParameterGroup = false);
+    FConnectedGraph(bool InIsVerticalLayout = false, bool InIsParameterGroup = false);
     FConnectedGraph(const FConnectedGraph& Other);
     virtual FFormatterGraph* Clone() override;
     void RemoveNode(FFormatterNode* NodeToRemove);
     virtual void Format() override;
-    virtual TMap<UEdGraphNode*, FBox2D> GetBoundMap() override;
+    virtual TMap<void*, FBox2D> GetBoundMap() override;
     virtual void OffsetBy(const FVector2D& InOffset) override;
-    virtual TMap<UEdGraphPin*, FVector2D> GetPinsOffset() override;
+    virtual TMap<void*, FVector2D> GetPinsOffset() override;
     virtual TArray<FFormatterPin*> GetInputPins() const override;
     virtual TArray<FFormatterPin*> GetOutputPins() const override;
-    virtual TSet<UEdGraphNode*> GetOriginalNodes() const override;
+    virtual TSet<void*> GetOriginalNodes() const override;
 
-    static TArray<FFormatterEdge*> GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode = nullptr);
-    static void CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order);
-    static void CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer);
-    static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
-
-    const TArray<FFormatterNode*>& GetAllNodes() const;
 
 private:
-    static TArray<FFormatterNode*> GetSuccessorsForNodes(TSet<FFormatterNode*> Nodes);
+    
     TArray<FFormatterNode*> GetNodesGreaterThan(int32 i, TSet<FFormatterNode*>& Excluded);
 
     void DoLayering();
@@ -198,3 +198,4 @@ private:
 
     TArray<TArray<FFormatterNode*>> LayeredList;
 };
+
