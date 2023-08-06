@@ -75,14 +75,14 @@ FFormatterNode* FFormatterNode::CreateDummy()
     auto InPin = new FFormatterPin;
     InPin->Guid = FGuid::NewGuid();
     InPin->OriginalPin = nullptr;
-    InPin->Direction = EGPD_Input;
+    InPin->Direction = EFormatterPinDirection::In;
     InPin->OwningNode = DummyNode;
     InPin->NodeOffset = FVector2D::ZeroVector;
 
     auto OutPin = new FFormatterPin;
     OutPin->Guid = FGuid::NewGuid();
     OutPin->OriginalPin = nullptr;
-    OutPin->Direction = EGPD_Output;
+    OutPin->Direction = EFormatterPinDirection::Out;
     OutPin->OwningNode = DummyNode;
     OutPin->NodeOffset = FVector2D::ZeroVector;
 
@@ -97,7 +97,7 @@ void FFormatterNode::Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin,
     Edge->From = SourcePin;
     Edge->To = TargetPin;
     Edge->Weight = Weight;
-    if (SourcePin->Direction == EGPD_Output)
+    if (SourcePin->Direction == EFormatterPinDirection::Out)
     {
         OutEdges.Add(Edge);
     }
@@ -113,7 +113,7 @@ void FFormatterNode::Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetP
     {
         return Edge->From == SourcePin && Edge->To == TargetPin;
     };
-    if (SourcePin->Direction == EGPD_Output)
+    if (SourcePin->Direction == EFormatterPinDirection::Out)
     {
         const auto Index = OutEdges.IndexOfByPredicate(Predicate);
         if (Index != INDEX_NONE)

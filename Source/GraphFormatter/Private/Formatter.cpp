@@ -580,11 +580,11 @@ void FFormatter::PlaceBlock()
         return;
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
-    auto ConnectedNodesLeft = UEGraphAdapter::GetNodesConnected(SelectedNodes, EInOutOption::EIOO_IN);
+    auto ConnectedNodesLeft = UEGraphAdapter::GetNodesConnected(SelectedNodes, EFormatterPinDirection::In);
     FVector2D ConnectCenter;
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
     const FScopedTransaction Transaction(FFormatterCommands::Get().PlaceBlock->GetLabel());
-    if (UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EInOutOption::EIOO_IN))
+    if (UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EFormatterPinDirection::In))
     {
         auto Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
         auto Direction = IsVerticalLayout ? FVector(0, 1, 0) : FVector(1, 0, 0);
@@ -593,7 +593,7 @@ void FFormatter::PlaceBlock()
         auto RightBound = IsVerticalLayout ? FVector(0, Bound.Bottom, 0) : FVector(Bound.Right, 0, 0);
         auto LinkedCenter3D = RightRay.PointAt(RightRay.GetParameter(RightBound));
         auto LinkedCenterTo = FVector2D(LinkedCenter3D) + (IsVerticalLayout ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
-        UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EInOutOption::EIOO_IN, true);
+        UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EFormatterPinDirection::In, true);
         Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
         Direction = IsVerticalLayout ? FVector(0, -1, 0) : FVector(-1, 0, 0);
         auto LeftRay = FRay(Center, Direction, true);
@@ -604,8 +604,8 @@ void FFormatter::PlaceBlock()
         FVector2D Offset = LinkedCenterTo - LinkedCenterFrom;
         Translate(SelectedNodes, Offset);
     }
-    auto ConnectedNodesRight = UEGraphAdapter::GetNodesConnected(SelectedNodes, EInOutOption::EIOO_OUT);
-    if (UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EInOutOption::EIOO_OUT))
+    auto ConnectedNodesRight = UEGraphAdapter::GetNodesConnected(SelectedNodes, EFormatterPinDirection::Out);
+    if (UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EFormatterPinDirection::Out))
     {
         auto Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
         auto Direction = IsVerticalLayout ? FVector(0, -1, 0) : FVector(-1, 0, 0);
@@ -614,7 +614,7 @@ void FFormatter::PlaceBlock()
         auto LeftBound = IsVerticalLayout ? FVector(0, Bound.Top, 0) : FVector(Bound.Left, 0, 0);
         auto LinkedCenter3D = LeftRay.PointAt(LeftRay.GetParameter(LeftBound));
         auto LinkedCenterTo = FVector2D(LinkedCenter3D) - (IsVerticalLayout ? FVector2D(0, Settings.HorizontalSpacing) : FVector2D(Settings.HorizontalSpacing, 0));
-        UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EInOutOption::EIOO_OUT, true);
+        UEGraphAdapter::GetNodesConnectCenter(SelectedNodes, ConnectCenter, EFormatterPinDirection::Out, true);
         Center = FVector(ConnectCenter.X, ConnectCenter.Y, 0);
         Direction = IsVerticalLayout ? FVector(0, 1, 0) : FVector(1, 0, 0);
         auto RightRay = FRay(Center, Direction, true);

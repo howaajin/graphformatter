@@ -69,16 +69,16 @@ FFormatterNode* UEGraphAdapter::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGr
     return Node;
 }
 
-TSet<UEdGraphNode*> UEGraphAdapter::GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option)
+TSet<UEdGraphNode*> UEGraphAdapter::GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EFormatterPinDirection Option)
 {
     TSet<UEdGraphNode*> DirectConnectedNodes;
     for (auto Node : SelectedNodes)
     {
         for (auto Pin : Node->Pins)
         {
-            if (Option == EInOutOption::EIOO_IN && Pin->Direction == EGPD_Input ||
-                Option == EInOutOption::EIOO_OUT && Pin->Direction == EGPD_Output ||
-                Option == EInOutOption::EIOO_ALL)
+            if (Option == EFormatterPinDirection::In && Pin->Direction == EGPD_Input ||
+                Option == EFormatterPinDirection::Out && Pin->Direction == EGPD_Output ||
+                Option == EFormatterPinDirection::InOut)
             {
                 for (auto LinkedPin : Pin->LinkedTo)
                 {
@@ -118,7 +118,7 @@ static void GetNodesConnectedRecursively(UEdGraphNode* RootNode, const TSet<UEdG
     }
 }
 
-TSet<UEdGraphNode*> UEGraphAdapter::GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option)
+TSet<UEdGraphNode*> UEGraphAdapter::GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EFormatterPinDirection Option)
 {
     TSet<UEdGraphNode*> DirectConnectedNodes = GetDirectConnected(SelectedNodes, Option);
     TSet<UEdGraphNode*> Result;
@@ -130,7 +130,7 @@ TSet<UEdGraphNode*> UEGraphAdapter::GetNodesConnected(const TSet<UEdGraphNode*>&
     return Result;
 }
 
-bool UEGraphAdapter::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EInOutOption Option, bool bInvert)
+bool UEGraphAdapter::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EFormatterPinDirection Option, bool bInvert)
 {
     FBox2D Bound(ForceInit);
     for (auto Node : SelectedNodes)
@@ -141,9 +141,9 @@ bool UEGraphAdapter::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNo
             {
                 continue;
             }
-            if (Option == EInOutOption::EIOO_IN && Pin->Direction == EGPD_Input ||
-                Option == EInOutOption::EIOO_OUT && Pin->Direction == EGPD_Output ||
-                Option == EInOutOption::EIOO_ALL)
+            if (Option == EFormatterPinDirection::In && Pin->Direction == EGPD_Input ||
+                Option == EFormatterPinDirection::Out && Pin->Direction == EGPD_Output ||
+                Option == EFormatterPinDirection::InOut)
             {
                 for (auto LinkedPin : Pin->LinkedTo)
                 {
@@ -407,7 +407,7 @@ FFormatterNode* UEGraphAdapter::FormatterNodeFromUEGraphNode(UEdGraphNode* InNod
         auto NewPin = new FFormatterPin;
         NewPin->Guid = FGuid::NewGuid();
         NewPin->OriginalPin = Pin;
-        NewPin->Direction = Pin->Direction;
+        NewPin->Direction = Pin->Direction == EGPD_Input ? EFormatterPinDirection::In : EFormatterPinDirection::Out;
         NewPin->OwningNode = Node;
         NewPin->NodeOffset = FFormatter::Instance().GetPinOffset(Pin);
         if (Pin->Direction == EGPD_Input)

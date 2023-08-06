@@ -11,9 +11,9 @@ public:
     static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
     static FFormatterNode* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment, bool InIsVerticalLayout = false);
     static FFormatterNode* CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group, bool InIsVerticalLayout = false);
-    static TSet<UEdGraphNode*> GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
-    static TSet<UEdGraphNode*> GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option);
-    static bool GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EInOutOption Option, bool bInvert = false);
+    static TSet<UEdGraphNode*> GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EFormatterPinDirection Option);
+    static TSet<UEdGraphNode*> GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EFormatterPinDirection Option);
+    static bool GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EFormatterPinDirection Option, bool bInvert = false);
     static void BuildNodes(FFormatterGraph* Graph, TSet<UEdGraphNode*> SelectedNodes);
     static void BuildEdges(TArray<FFormatterNode*>& Nodes, TMap<void*, FFormatterPin*>& PinsMap, TSet<UEdGraphNode*> SelectedNodes);
     static void BuildNodesAndEdges(FFormatterGraph* Graph, TArray<FFormatterNode*>& Nodes, TMap<void*, FFormatterPin*>& PinsMap, const TSet<UEdGraphNode*>& SelectedNodes);

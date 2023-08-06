@@ -11,12 +11,19 @@ class FConnectedGraph;
 class FFormatterNode;
 class FFormatterGraph;
 
+enum class EFormatterPinDirection : int
+{
+    In,
+    Out,
+    InOut,
+};
+
 class FFormatterPin
 {
 public:
     FGuid Guid;
     void* OriginalPin{nullptr};
-    EEdGraphPinDirection Direction{EGPD_Input};
+    EFormatterPinDirection Direction{EFormatterPinDirection::In};
     FFormatterNode* OwningNode{nullptr};
     FVector2D NodeOffset;
     int32 IndexInLayer{-1};
@@ -88,13 +95,6 @@ public:
 private:
     float OrderValue{0.0f};
     FVector2D Position;
-};
-
-enum class EInOutOption
-{
-    EIOO_ALL,
-    EIOO_IN,
-    EIOO_OUT
 };
 
 class FFormatterGraph
