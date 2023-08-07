@@ -9,9 +9,9 @@ FFormatterGraph* UEGraphAdapter::Build(TSet<UEdGraphNode*> Nodes, bool InIsVerti
 {
     auto Graph = new FFormatterGraph(InIsVerticalLayout, InIsParameterGroup);
     BuildNodesAndEdges(Graph, Graph->Nodes, Graph->OriginalPinsMap, Nodes);
-
     auto FoundIsolatedGraphs = FindIsolated(Graph->Nodes);
     delete Graph;
+    
     if (FoundIsolatedGraphs.Num() > 1)
     {
         auto DisconnectedGraph = new FDisconnectedGraph();
@@ -63,6 +63,7 @@ FFormatterNode* UEGraphAdapter::CollapseCommentNode(UEdGraphNode* CommentNode, T
 FFormatterNode* UEGraphAdapter::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group, bool InIsVerticalLayout)
 {
     FFormatterNode* Node = new FFormatterNode();
+    Node->SetPosition(FVector2D(MainNode->NodePosX, MainNode->NodePosY));
     Node->OriginalNode = MainNode;
     FConnectedGraph* SubGraph = BuildConnectedGraph(Group, InIsVerticalLayout, true);
     Node->SetSubGraph(SubGraph);
