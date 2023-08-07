@@ -546,7 +546,7 @@ void FFormatter::Format()
     const FScopedTransaction Transaction(FFormatterCommands::Get().FormatGraph->GetLabel());
     for (auto [Node, Rect] : BoundMap)
     {
-        UEdGraphNode* UEdNode = reinterpret_cast<UEdGraphNode*>(Node);
+        UEdGraphNode* UEdNode = static_cast<UEdGraphNode*>(Node);
         auto WidgetNode = GetWidget(UEdNode);
         SGraphPanel::SNode::FNodeSet Filter;
         WidgetNode->MoveTo(Rect.Min, Filter, true);
