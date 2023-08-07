@@ -48,7 +48,6 @@ public:
     FFormatterModule* Module;
     IAssetEditorInstance* Instance;
     UObject* Object;
-    FDelegateHandle OpenedDelegate;
     void HandleEditorWidgetCreated(UObject* Object);
 };
 
@@ -150,7 +149,7 @@ void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInst
         if (!FAssetEditorInstance::Instances.Contains(Object))
         {
             auto EditorInstance = new FAssetEditorInstance{this, Instance, Object};
-            EditorInstance->OpenedDelegate = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().AddRaw(EditorInstance, &FAssetEditorInstance::HandleEditorWidgetCreated);
+            GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().AddRaw(EditorInstance, &FAssetEditorInstance::HandleEditorWidgetCreated);
             FAssetEditorInstance::Instances.Add(Object, EditorInstance);
         }
         else
@@ -391,7 +390,7 @@ void FAssetEditorInstance::HandleEditorWidgetCreated(UObject* InObject)
     }
     if (GEditor)
     {
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().Remove(OpenedDelegate);
+        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().RemoveAll(this);
     }
     Instances.Remove(Object);
     delete this;
@@ -406,8 +405,6 @@ void FFormatterModule::ShutdownModule()
     }
     if (GEditor)
     {
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().RemoveAll(this);
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorRequestClose().RemoveAll(this);
         GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().RemoveAll(this);
     }
     FFormatterStyle::Shutdown();
