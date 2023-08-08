@@ -601,10 +601,10 @@ FFormatterNode* FConnectedGraph::FindSinkNode() const
 
 FFormatterNode* FConnectedGraph::FindMaxInOutWeightDiffNode() const
 {
-    auto EdgesWeightSum = [](TArray<FFormatterEdge*> Edges)
+    auto EdgesWeightSum = [](const TArray<FFormatterEdge*>& Edges)
     {
         float Sum = 0;
-        for (auto Edge : Edges)
+        for (const auto Edge : Edges)
         {
             Sum += Edge->Weight;
         }
@@ -612,7 +612,7 @@ FFormatterNode* FConnectedGraph::FindMaxInOutWeightDiffNode() const
     };
     FFormatterNode* Result = nullptr;
     int32 MaxWeight = -INT32_MAX;
-    for (auto Node : Nodes)
+    for (const auto Node : Nodes)
     {
         const int32 Diff = EdgesWeightSum(Node->OutEdges) - EdgesWeightSum(Node->InEdges);
         if (Diff > MaxWeight)
