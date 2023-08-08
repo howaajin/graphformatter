@@ -8,20 +8,20 @@
 #include "FormatterSettings.h"
 #include "EvenlyPlaceStrategy.h"
 
-static FSlateRect PlaceNodeInLayer(TArray<FFormatterNode*>& Layer)
+static FBox2D PlaceNodeInLayer(TArray<FFormatterNode*>& Layer)
 {
-    FSlateRect Bound;
+    FBox2D Bound(ForceInit);
     FVector2D Position = FVector2D(0, 0);
     for (auto Node : Layer)
     {
         Node->SetPosition(Position);
-        if (Bound.IsValid())
+        if (Bound.bIsValid)
         {
-            Bound = Bound.Expand(FSlateRect::FromPointAndExtent(Position, Node->Size));
+            Bound += FBox2D(Position, Position + Node->Size);
         }
         else
         {
-            Bound = FSlateRect::FromPointAndExtent(Position, Node->Size);
+            Bound = FBox2D(Position, Position + Node->Size);
         }
         Position.Y += Node->Size.Y;
     }

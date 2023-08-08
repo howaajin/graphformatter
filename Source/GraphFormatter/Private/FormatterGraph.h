@@ -12,7 +12,7 @@ class FFormatterNode;
 class FFormatterGraph;
 
 UENUM()
-enum class EGraphFormatterPositioningAlgorithm
+enum class EGraphFormatterPositioningAlgorithm : uint8
 {
     EEvenlyInLayer UMETA(DisplayName = "Place node evenly in layer"),
     EFastAndSimpleMethodTop UMETA(DisplayName = "FAS Top"),
@@ -20,7 +20,8 @@ enum class EGraphFormatterPositioningAlgorithm
     ELayerSweep UMETA(DisplayName = "Layer sweep"),
 };
 
-enum class EFormatterPinDirection : int
+UENUM()
+enum class EFormatterPinDirection : uint8
 {
     In,
     Out,
@@ -74,6 +75,7 @@ public:
     ~FFormatterNode();
     void Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin, float Weight = 1);
     void Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetPin);
+    void AddPin(FFormatterPin* Pin);
     TArray<FFormatterNode*> GetSuccessors() const;
     TArray<FFormatterNode*> GetPredecessors() const;
     bool IsSource() const;
@@ -110,15 +112,16 @@ class FFormatterGraph
 {
 public:
     static TArray<FBox2D> CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection = true, bool IsParameterGroup = false);
-    inline static int32 HorizontalSpacing;
-    inline static int32 VerticalSpacing;
-    inline static FVector2D SpacingFactorOfGroup;
-    inline static int32 MaxLayerNodes;
-    inline static int32 MaxOrderingIterations;
-    inline static EGraphFormatterPositioningAlgorithm PositioningAlgorithm;
+    inline static int32 HorizontalSpacing = 100;
+    inline static int32 VerticalSpacing = 80;
+    inline static FVector2D SpacingFactorOfGroup = FVector2D(0.314);
+    inline static int32 MaxLayerNodes = 5;
+    inline static int32 MaxOrderingIterations = 10;
+    inline static EGraphFormatterPositioningAlgorithm PositioningAlgorithm = EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian;
 
     FFormatterGraph(const FFormatterGraph& Other);
     virtual ~FFormatterGraph();
+    void DetachAndDestroy();
     virtual FFormatterGraph* Clone();
 
     explicit FFormatterGraph(bool InIsVerticalLayout = false, bool InIsParameterGroup = false);
@@ -161,6 +164,8 @@ protected:
     FBox2D Border = {FVector2D(ForceInitToZero), FVector2D(ForceInitToZero)};
     bool IsParameterGroup = false;
     bool IsVerticalLayout = false;
+private:
+    bool IsNodeDetached = false;
 };
 
 class FDisconnectedGraph : public FFormatterGraph

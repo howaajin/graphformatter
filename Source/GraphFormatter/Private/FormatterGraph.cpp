@@ -129,6 +129,18 @@ void FFormatterNode::Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetP
     }
 }
 
+void FFormatterNode::AddPin(FFormatterPin* Pin)
+{
+    if (Pin->Direction == EFormatterPinDirection::In)
+    {
+        InPins.Add(Pin);
+    }
+    else
+    {
+        OutPins.Add(Pin);
+    }
+}
+
 TArray<FFormatterNode*> FFormatterNode::GetSuccessors() const
 {
     TArray<FFormatterNode*> Result;
@@ -765,10 +777,21 @@ FFormatterGraph::FFormatterGraph(const FFormatterGraph& Other)
 
 FFormatterGraph::~FFormatterGraph()
 {
+    if (IsNodeDetached)
+    {
+        return;
+    }
+ 
     for (auto Node : Nodes)
     {
         delete Node;
     }
+}
+
+void FFormatterGraph::DetachAndDestroy()
+{
+    IsNodeDetached = true;
+    delete this;
 }
 
 FFormatterGraph* FFormatterGraph::Clone()
