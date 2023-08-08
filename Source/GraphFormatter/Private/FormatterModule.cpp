@@ -156,24 +156,32 @@ void FFormatterModule::MapCommands(UObject* Object, IAssetEditorInstance* Instan
 void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance)
 {
     UE_LOG(LogGraphFormatter, Log, TEXT("AssetEditorOpened for: %s"), *Object->GetClass()->GetName());
+    if (!GEditor)
+    {
+        return;
+    }
     const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
-    MapCommands(Object, Instance);
     if (FFormatter::Instance().IsAssetSupported(Object))
     {
+        MapCommands(Object, Instance);
         ExtendToolBar(Instance);
     }
-    else if (Settings->AutoDetectGraphEditor && GEditor)
+    else
     {
-        if (!FAssetEditorInstance::Instances.Contains(Object))
+        if (Settings->AutoDetectGraphEditor)
         {
-            auto EditorInstance = new FAssetEditorInstance{this, Instance, Object};
-            GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().AddRaw(EditorInstance, &FAssetEditorInstance::HandleEditorWidgetCreated);
-            FAssetEditorInstance::Instances.Add(Object, EditorInstance);
-        }
-        else
-        {
-            auto EditorInstance = FAssetEditorInstance::Instances[Object];
-            EditorInstance->Instance = Instance;
+            MapCommands(Object, Instance);
+            if (!FAssetEditorInstance::Instances.Contains(Object))
+            {
+                auto EditorInstance = new FAssetEditorInstance{this, Instance, Object};
+                GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().AddRaw(EditorInstance, &FAssetEditorInstance::HandleEditorWidgetCreated);
+                FAssetEditorInstance::Instances.Add(Object, EditorInstance);
+            }
+            else
+            {
+                auto EditorInstance = FAssetEditorInstance::Instances[Object];
+                EditorInstance->Instance = Instance;
+            }
         }
     }
 }
@@ -382,6 +390,8 @@ void FFormatterModule::OnGraphEditorDetected(UObject* Object, IAssetEditorInstan
     if(!MutableSettings->SupportedAssetTypes.Contains(Object->GetClass()->GetName()))
     {
         MutableSettings->SupportedAssetTypes.Add(Object->GetClass()->GetName(), true);
+        MutableSettings->PostEditChange();
+        MutableSettings->SaveConfig();
         FAssetEditorToolkit* AssetEditorToolkit = StaticCast<FAssetEditorToolkit*>(Instance);
         ExtendToolBar(Instance);
         AssetEditorToolkit->RegenerateMenusAndToolbars();
