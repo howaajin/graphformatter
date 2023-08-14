@@ -31,18 +31,35 @@ enum class EFormatterPinDirection : uint8
 class FFormatterPin
 {
 public:
+    // Guid for this Pin, used to mapping different instances to one instance
+    // For example, in a duplicated graph, needs to know the original pin
     FGuid Guid;
+
+    // User-defined pointer used as a mapping key from a child graph pin to the original graph pin
     void* OriginalPin{nullptr};
+    
     EFormatterPinDirection Direction{EFormatterPinDirection::In};
+
+    // Owner of the pin
     FFormatterNode* OwningNode{nullptr};
+
+    // Position relate to Owner
     FVector2D NodeOffset;
+    
+    // When the "Owner" is assigned to a certain layer, this pin's index within that layer
+    // Can be used to detect intersections
     int32 IndexInLayer{-1};
 };
 
+// An edge is defined here as belonging to a specific node,
+// meaning the connection between two nodes, with each edge storing information about the connection between the two nodes
 class FFormatterEdge
 {
 public:
+    // The owner's pin the edge linked to, it can be either an "In" or "Out" direction
     FFormatterPin* From;
+
+    // Indicates which pin this edge is connected to, it can be either an "In" or "Out" direction
     FFormatterPin* To;
     float Weight = 1;
     bool IsCrossing(const FFormatterEdge* Edge) const;
