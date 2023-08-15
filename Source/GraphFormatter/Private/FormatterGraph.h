@@ -76,16 +76,37 @@ public:
     static void CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order);
     static int32 CalculateCrossing(const TArray<TArray<FFormatterNode*>>& Order);
 
+    // Guid for this node, used to mapping different instances to one instance
+    // For example, in a duplicated graph, needs to know the original pin
     FGuid Guid;
+
+    // Custom pointer for user-defined nodes tracking
     void* OriginalNode = nullptr;
+
+    // Indicating whether this node is a subgraph
     FFormatterGraph* SubGraph = nullptr;
+
+    // Representing the size of the node or the bounding box size of a subgraph
     FVector2D Size;
+
+    // Edges with an "In" direction "From" pin
     TArray<FFormatterEdge*> InEdges;
+    
+    // Edges with an "Out" direction "From" pin
     TArray<FFormatterEdge*> OutEdges;
+
+    // All pins with an "In" direction
     TArray<FFormatterPin*> InPins;
+    
+    // All pins with an "Out" direction
     TArray<FFormatterPin*> OutPins;
+
+    // Path depth used in the longest path layering algorithm 
     int32 PathDepth;
+    
+    // Positioning priority used in priority positioning algorithm 
     int32 PositioningPriority;
+    
     FFormatterNode(const FFormatterNode& Other);
     FFormatterNode();
 
