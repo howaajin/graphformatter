@@ -19,7 +19,10 @@
 #include "graph_layout/graph_layout.h"
 using namespace graph_layout;
 
+#define GRAPH_FORMATTER_HACK
+
 /** Hack start. Access to private member legally. */
+#ifdef GRAPH_FORMATTER_HACK
 #include "PrivateAccessor.h"
 
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SGraphPanel_ZoomLevels, SNodePanel, TUniquePtr<FZoomLevelsContainer>, ZoomLevels)
@@ -93,6 +96,7 @@ void FFormatter::RestoreZoomLevel() const
     CurrentPanel->*FPrivateAccessor<FAccess_SNodePanel_CurrentLOD>::Member = OldLOD;
 }
 
+#endif
 /** Hack end  */
 
 void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
@@ -284,7 +288,10 @@ bool FFormatter::PreCommand()
     {
         return false;
     }
+
+#ifdef GRAPH_FORMATTER_HACK
     SetZoomLevelTo11Scale();
+#endif
 
     const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
     FFormatterGraph::HorizontalSpacing = Settings->HorizontalSpacing;
@@ -298,7 +305,9 @@ bool FFormatter::PreCommand()
 
 void FFormatter::PostCommand()
 {
+#ifdef GRAPH_FORMATTER_HACK
     RestoreZoomLevel();
+#endif
 }
 
 void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const
@@ -554,10 +563,13 @@ void FFormatter::Format()
         {
             auto CommentNode = Cast<UEdGraphNode_Comment>(UEdNode);
             CommentNode->SetBounds(FSlateRect(Rect.Min, Rect.Max));
+
+#ifdef GRAPH_FORMATTER_HACK
             if (auto NodeResizable = StaticCast<SGraphNodeResizable*>(WidgetNode))
             {
                 NodeResizable->*FPrivateAccessor<FAccess_SGraphNodeResizable_UserSize>::Member = Rect.GetSize();
             }
+#endif
         }
     }
     PostCommand();
