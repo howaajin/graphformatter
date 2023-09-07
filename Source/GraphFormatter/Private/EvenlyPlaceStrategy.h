@@ -10,7 +10,7 @@
 
 class FEvenlyPlaceStrategy : public IPositioningStrategy
 {
-    FSlateRect PlaceNodeInLayer(TArray<FFormatterNode*>& Layer, const FSlateRect& PreBound);
+    FBox2D PlaceNodeInLayer(TArray<FFormatterNode*>& Layer, const FBox2D& PreBound);
     FFormatterNode* FindFirstNodeInLayeredList(TArray<TArray<FFormatterNode*>>& InLayeredNodes);
 public:
     explicit FEvenlyPlaceStrategy(TArray<TArray<FFormatterNode*>>& InLayeredNodes);

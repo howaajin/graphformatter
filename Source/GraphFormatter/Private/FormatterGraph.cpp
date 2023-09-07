@@ -4,56 +4,19 @@
  *--------------------------------------------------------------------------------------------*/
 
 #include "FormatterGraph.h"
-#include "EdGraph/EdGraphNode.h"
-#include "EdGraph/EdGraphPin.h"
-#include "EdGraphNode_Comment.h"
+
 #include "EvenlyPlaceStrategy.h"
 #include "FastAndSimplePositioningStrategy.h"
-#include "Formatter.h"
-#include "FormatterSettings.h"
-#include "IPositioningStrategy.h"
 #include "PriorityPositioningStrategy.h"
-
-#include "BehaviorTree/BTNode.h"
-#include "Editor/BehaviorTreeEditor/Classes/BehaviorTreeGraphNode.h"
-
-#include "graph_layout/graph_layout.h"
 
 bool FFormatterEdge::IsCrossing(const FFormatterEdge* Edge) const
 {
     return (From->IndexInLayer < Edge->From->IndexInLayer && To->IndexInLayer > Edge->To->IndexInLayer) || (From->IndexInLayer > Edge->From->IndexInLayer && To->IndexInLayer < Edge->To->IndexInLayer);
 }
 
-bool FFormatterEdge::IsInnerSegment()
+bool FFormatterEdge::IsInnerSegment() const
 {
     return From->OwningNode->OriginalNode == nullptr && To->OwningNode->OriginalNode == nullptr;
-}
-
-FFormatterNode::FFormatterNode(UEdGraphNode* InNode)
-    : Guid(InNode->NodeGuid)
-    , OriginalNode(InNode)
-    , SubGraph(nullptr)
-    , Size(FFormatter::Instance().GetNodeSize(InNode))
-    , PathDepth(0)
-    , Position(FVector2D(InNode->NodePosX, InNode->NodePosY))
-{
-    for (auto Pin : InNode->Pins)
-    {
-        auto NewPin = new FFormatterPin;
-        NewPin->Guid = FGuid::NewGuid();
-        NewPin->OriginalPin = Pin;
-        NewPin->Direction = Pin->Direction;
-        NewPin->OwningNode = this;
-        NewPin->NodeOffset = FFormatter::Instance().GetPinOffset(Pin);
-        if (Pin->Direction == EGPD_Input)
-        {
-            InPins.Add(NewPin);
-        }
-        else
-        {
-            OutPins.Add(NewPin);
-        }
-    }
 }
 
 FFormatterNode::FFormatterNode(const FFormatterNode& Other)
@@ -95,8 +58,6 @@ FFormatterNode::FFormatterNode(const FFormatterNode& Other)
 
 FFormatterNode::FFormatterNode()
     : Guid(FGuid::NewGuid())
-    , OriginalNode(nullptr)
-    , SubGraph(nullptr)
     , Size(FVector2D(1, 1))
     , PathDepth(0)
     , PositioningPriority(INT_MAX)
@@ -110,14 +71,14 @@ FFormatterNode* FFormatterNode::CreateDummy()
     auto InPin = new FFormatterPin;
     InPin->Guid = FGuid::NewGuid();
     InPin->OriginalPin = nullptr;
-    InPin->Direction = EGPD_Input;
+    InPin->Direction = EFormatterPinDirection::In;
     InPin->OwningNode = DummyNode;
     InPin->NodeOffset = FVector2D::ZeroVector;
 
     auto OutPin = new FFormatterPin;
     OutPin->Guid = FGuid::NewGuid();
     OutPin->OriginalPin = nullptr;
-    OutPin->Direction = EGPD_Output;
+    OutPin->Direction = EFormatterPinDirection::Out;
     OutPin->OwningNode = DummyNode;
     OutPin->NodeOffset = FVector2D::ZeroVector;
 
@@ -132,7 +93,7 @@ void FFormatterNode::Connect(FFormatterPin* SourcePin, FFormatterPin* TargetPin,
     Edge->From = SourcePin;
     Edge->To = TargetPin;
     Edge->Weight = Weight;
-    if (SourcePin->Direction == EGPD_Output)
+    if (SourcePin->Direction == EFormatterPinDirection::Out)
     {
         OutEdges.Add(Edge);
     }
@@ -148,7 +109,7 @@ void FFormatterNode::Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetP
     {
         return Edge->From == SourcePin && Edge->To == TargetPin;
     };
-    if (SourcePin->Direction == EGPD_Output)
+    if (SourcePin->Direction == EFormatterPinDirection::Out)
     {
         const auto Index = OutEdges.IndexOfByPredicate(Predicate);
         if (Index != INDEX_NONE)
@@ -165,6 +126,18 @@ void FFormatterNode::Disconnect(FFormatterPin* SourcePin, FFormatterPin* TargetP
             delete InEdges[Index];
             InEdges.RemoveAt(Index);
         }
+    }
+}
+
+void FFormatterNode::AddPin(FFormatterPin* Pin)
+{
+    if (Pin->Direction == EFormatterPinDirection::In)
+    {
+        InPins.Add(Pin);
+    }
+    else
+    {
+        OutPins.Add(Pin);
     }
 }
 
@@ -268,7 +241,7 @@ float FFormatterNode::GetMaxWeightToNode(const FFormatterNode* Node, EEdGraphPin
 bool FFormatterNode::IsCrossingInnerSegment(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer) const
 {
     auto EdgesLinkedToUpper = GetEdgeLinkedToLayer(UpperLayer, EGPD_Input);
-    auto EdgesBetweenTwoLayers = FConnectedGraph::GetEdgeBetweenTwoLayer(LowerLayer, UpperLayer, this);
+    auto EdgesBetweenTwoLayers = GetEdgeBetweenTwoLayer(LowerLayer, UpperLayer, this);
     for (auto EdgeLinkedToUpper : EdgesLinkedToUpper)
     {
         for (auto EdgeBetweenTwoLayers : EdgesBetweenTwoLayers)
@@ -493,17 +466,7 @@ void FFormatterNode::UpdatePinsOffset(FVector2D Border)
     }
 }
 
-static float GetEdgeWeight(UEdGraphPin* StartPin)
-{
-    float weight = 1;
-    if (StartPin->PinType.PinCategory == "exec")
-    {
-        weight = 99;
-    }
-    return weight;
-}
-
-TArray<FFormatterNode*> FConnectedGraph::GetSuccessorsForNodes(TSet<FFormatterNode*> Nodes)
+TArray<FFormatterNode*> FFormatterNode::GetSuccessorsForNodes(TSet<FFormatterNode*> Nodes)
 {
     TArray<FFormatterNode*> Result;
     for (auto Node : Nodes)
@@ -519,6 +482,33 @@ TArray<FFormatterNode*> FConnectedGraph::GetSuccessorsForNodes(TSet<FFormatterNo
     return Result;
 }
 
+void FFormatterNode::CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer)
+{
+    int32 InPinStartIndex = 0, OutPinStartIndex = 0;
+    for (int32 j = 0; j < Layer.Num(); j++)
+    {
+        for (auto InPin : Layer[j]->InPins)
+        {
+            InPin->IndexInLayer = InPinStartIndex + Layer[j]->GetInputPinIndex(InPin);
+        }
+        for (auto OutPin : Layer[j]->OutPins)
+        {
+            OutPin->IndexInLayer = OutPinStartIndex + Layer[j]->GetOutputPinIndex(OutPin);
+        }
+        OutPinStartIndex += Layer[j]->GetOutputPinCount();
+        InPinStartIndex += Layer[j]->GetInputPinCount();
+    }
+}
+
+void FFormatterNode::CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order)
+{
+    for (int32 i = 0; i < Order.Num(); i++)
+    {
+        auto& Layer = Order[i];
+        CalculatePinsIndexInLayer(Layer);
+    }
+}
+
 TArray<FFormatterNode*> FConnectedGraph::GetNodesGreaterThan(int32 i, TSet<FFormatterNode*>& Excluded)
 {
     TArray<FFormatterNode*> Result;
@@ -530,156 +520,6 @@ TArray<FFormatterNode*> FConnectedGraph::GetNodesGreaterThan(int32 i, TSet<FForm
         }
     }
     return Result;
-}
-
-TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded)
-{
-    TSet<UEdGraphNode*> VisitedNodes;
-    TArray<UEdGraphNode*> Stack;
-    Stack.Push(Node);
-    while (!Stack.IsEmpty())
-    {
-        auto StackNode = Stack.Pop();
-        VisitedNodes.Add(StackNode);
-        for (auto Pin : StackNode->Pins)
-        {
-            if (Pin->Direction != EGPD_Input || FFormatter::IsExecPin(Pin))
-            {
-                continue;
-            }
-            for (auto LinkedPin : Pin->LinkedTo)
-            {
-                auto LinkedNode = LinkedPin->GetOwningNodeUnchecked();
-                if (!Included.Contains(LinkedNode) ||
-                    VisitedNodes.Contains(LinkedNode) ||
-                    Excluded.Contains(LinkedNode) ||
-                    FFormatter::HasExecPin(LinkedNode))
-                {
-                    continue;
-                }
-                Stack.Add(LinkedNode);
-            }
-        }
-    }
-    return VisitedNodes;
-}
-
-TArray<UEdGraphNode_Comment*> FConnectedGraph::GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes)
-{
-    TArray<UEdGraphNode_Comment*> CommentNodes;
-    for (auto Node : SelectedNodes)
-    {
-        if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
-        {
-            auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
-            CommentNodes.Add(CommentNode);
-        }
-    }
-    CommentNodes.Sort([](const UEdGraphNode_Comment& A, const UEdGraphNode_Comment& B)
-                      { return A.CommentDepth < B.CommentDepth; });
-    return CommentNodes;
-}
-
-static void GetNodesConnectedRecursively(UEdGraphNode* RootNode, const TSet<UEdGraphNode*>& Excluded, TSet<UEdGraphNode*>& OutSet)
-{
-    TSet<UEdGraphNode*> Set;
-    for (auto Pin : RootNode->Pins)
-    {
-        for (auto LinkedToPin : Pin->LinkedTo)
-        {
-            auto LinkedNode = LinkedToPin->GetOwningNodeUnchecked();
-            if (!Excluded.Contains(LinkedNode) && !OutSet.Contains(LinkedNode))
-            {
-                Set.Add(LinkedNode);
-            }
-        }
-    }
-    if (Set.Num())
-    {
-        OutSet.Append(Set);
-        for (auto Node : Set)
-        {
-            GetNodesConnectedRecursively(Node, Excluded, OutSet);
-        }
-    }
-}
-
-TSet<UEdGraphNode*> FFormatterGraph::GetDirectConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option)
-{
-    TSet<UEdGraphNode*> DirectConnectedNodes;
-    for (auto Node : SelectedNodes)
-    {
-        for (auto Pin : Node->Pins)
-        {
-            if (Option == EInOutOption::EIOO_IN && Pin->Direction == EGPD_Input ||
-                Option == EInOutOption::EIOO_OUT && Pin->Direction == EGPD_Output ||
-                Option == EInOutOption::EIOO_ALL)
-            {
-                for (auto LinkedPin : Pin->LinkedTo)
-                {
-                    auto LinkedNode = LinkedPin->GetOwningNodeUnchecked();
-                    if (!SelectedNodes.Contains(LinkedNode))
-                    {
-                        DirectConnectedNodes.Add(LinkedNode);
-                    }
-                }
-            }
-        }
-    }
-    return DirectConnectedNodes;
-}
-
-TSet<UEdGraphNode*> FFormatterGraph::GetNodesConnected(const TSet<UEdGraphNode*>& SelectedNodes, EInOutOption Option)
-{
-    TSet<UEdGraphNode*> DirectConnectedNodes = GetDirectConnected(SelectedNodes, Option);
-    TSet<UEdGraphNode*> Result;
-    Result.Append(DirectConnectedNodes);
-    for (auto Node : DirectConnectedNodes)
-    {
-        GetNodesConnectedRecursively(Node, SelectedNodes, Result);
-    }
-    return Result;
-}
-
-bool FFormatterGraph::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNodes, FVector2D& OutCenter, EInOutOption Option, bool bInvert)
-{
-    FSlateRect Bound;
-    for (auto Node : SelectedNodes)
-    {
-        for (auto Pin : Node->Pins)
-        {
-            if (FFormatter::Instance().IsBlueprint && !FFormatter::Instance().IsExecPin(Pin))
-            {
-                continue;
-            }
-            if (Option == EInOutOption::EIOO_IN && Pin->Direction == EGPD_Input ||
-                Option == EInOutOption::EIOO_OUT && Pin->Direction == EGPD_Output ||
-                Option == EInOutOption::EIOO_ALL)
-            {
-                for (auto LinkedPin : Pin->LinkedTo)
-                {
-                    auto LinkedNode = LinkedPin->GetOwningNodeUnchecked();
-                    if (!SelectedNodes.Contains(LinkedNode))
-                    {
-                        auto Pos = FFormatter::Instance().GetNodePosition(bInvert ? Node : LinkedNode);
-                        auto PinOffset = FFormatter::Instance().GetPinOffset(bInvert ? Pin : LinkedPin);
-                        auto LinkedPos = Pos + PinOffset;
-                        FSlateRect PosZeroBound = FSlateRect::FromPointAndExtent(LinkedPos, FVector2D(0, 0));
-                        Bound = Bound.IsValid() ? Bound.Expand(PosZeroBound) : PosZeroBound;
-                    }
-                }
-            }
-        }
-    }
-    if (Bound.IsValid())
-    {
-        OutCenter = Bound.GetCenter();
-        return true;
-    }
-    else
-    {
-        return false;
-    }
 }
 
 void FConnectedGraph::RemoveNode(FFormatterNode* NodeToRemove)
@@ -761,10 +601,10 @@ FFormatterNode* FConnectedGraph::FindSinkNode() const
 
 FFormatterNode* FConnectedGraph::FindMaxInOutWeightDiffNode() const
 {
-    auto EdgesWeightSum = [](TArray<FFormatterEdge*> Edges)
+    auto EdgesWeightSum = [](const TArray<FFormatterEdge*>& Edges)
     {
         float Sum = 0;
-        for (auto Edge : Edges)
+        for (const auto Edge : Edges)
         {
             Sum += Edge->Weight;
         }
@@ -772,7 +612,7 @@ FFormatterNode* FConnectedGraph::FindMaxInOutWeightDiffNode() const
     };
     FFormatterNode* Result = nullptr;
     int32 MaxWeight = -INT32_MAX;
-    for (auto Node : Nodes)
+    for (const auto Node : Nodes)
     {
         const int32 Diff = EdgesWeightSum(Node->OutEdges) - EdgesWeightSum(Node->InEdges);
         if (Diff > MaxWeight)
@@ -784,62 +624,31 @@ FFormatterNode* FConnectedGraph::FindMaxInOutWeightDiffNode() const
     return Result;
 }
 
-FFormatterGraph* FFormatterGraph::Build(TSet<UEdGraphNode*> SelectedNodes)
+TArray<FBox2D> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection, bool IsParameterGroup)
 {
-    auto Graph = new FFormatterGraph(true);
-    Graph->BuildNodesAndEdges(SelectedNodes);
-
-    auto FoundIsolatedGraphs = Graph->FindIsolated();
-    delete Graph;
-    if (FoundIsolatedGraphs.Num() > 1)
-    {
-        auto DisconnectedGraph =  new FDisconnectedGraph();
-        for (const auto& IsolatedNodes : FoundIsolatedGraphs)
-        {
-            auto NewGraph = new FConnectedGraph(IsolatedNodes);
-            DisconnectedGraph->AddGraph(NewGraph);
-        }
-        return DisconnectedGraph;
-    }
-    else
-    {
-        return new FConnectedGraph(SelectedNodes);
-    }
-}
-
-TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatterNode*>>& InLayeredNodes, bool IsHorizontalDirection, bool IsParameterGroup)
-{
-    TArray<FSlateRect> LayersBound;
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    FSlateRect TotalBound;
+    TArray<FBox2D> LayersBound;
+    FBox2D TotalBound(ForceInit);
     FVector2D Spacing;
     if (IsHorizontalDirection)
     {
-        Spacing = FVector2D(Settings.HorizontalSpacing, 0);
-        if (IsParameterGroup)
-        {
-            Spacing *= Settings.SpacingFactorOfParameterGroup.X;
-        }
+        Spacing = FVector2D(HorizontalSpacing, 0);
     }
     else
     {
-        Spacing = FVector2D(0, Settings.VerticalSpacing);
-        if (IsParameterGroup)
-        {
-            if (IsParameterGroup)
-            {
-                Spacing *= Settings.SpacingFactorOfParameterGroup.X;
-            }
-        }
+        Spacing = FVector2D(0, VerticalSpacing);
+    }
+    if (IsParameterGroup)
+    {
+        Spacing *= SpacingFactorOfGroup.X;
     }
     for (int32 i = 0; i < InLayeredNodes.Num(); i++)
     {
         const auto& Layer = InLayeredNodes[i];
-        FSlateRect Bound;
+        FBox2D Bound(ForceInit);
         FVector2D Position;
-        if (TotalBound.IsValid())
+        if (TotalBound.bIsValid)
         {
-            Position = TotalBound.GetBottomRight() + Spacing;
+            Position = TotalBound.Max + Spacing;
         }
         else
         {
@@ -847,19 +656,19 @@ TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatte
         }
         for (auto Node : Layer)
         {
-            if (Bound.IsValid())
+            if (Bound.bIsValid)
             {
-                Bound = Bound.Expand(FSlateRect::FromPointAndExtent(Position, Node->Size));
+                Bound += FBox2D(Position, Position + Node->Size);
             }
             else
             {
-                Bound = FSlateRect::FromPointAndExtent(Position, Node->Size);
+                Bound = FBox2D(Position, Position + Node->Size);
             }
         }
         LayersBound.Add(Bound);
-        if (TotalBound.IsValid())
+        if (TotalBound.bIsValid)
         {
-            TotalBound = TotalBound.Expand(Bound);
+            TotalBound += Bound;
         }
         else
         {
@@ -869,211 +678,10 @@ TArray<FSlateRect> FFormatterGraph::CalculateLayersBound(TArray<TArray<FFormatte
     return LayersBound;
 }
 
-FFormatterGraph::FFormatterGraph(bool InIsParameterGroup)
-    :IsParameterGroup(InIsParameterGroup)
+FFormatterGraph::FFormatterGraph(bool InIsVerticalLayout, bool InIsParameterGroup)
+    : IsParameterGroup(InIsParameterGroup)
+    , IsVerticalLayout(InIsVerticalLayout)
 {
-}
-
-void FFormatterGraph::BuildNodes(TSet<UEdGraphNode*> SelectedNodes)
-{
-    while (true)
-    {
-        TArray<UEdGraphNode_Comment*> SortedCommentNodes = GetSortedCommentNodes(SelectedNodes);
-        if (SortedCommentNodes.Num() != 0)
-        {
-            // Topmost comment node has smallest negative depth value
-            const int32 Depth = SortedCommentNodes[0]->CommentDepth;
-
-            // Collapse all topmost comment nodes into virtual nodes.
-            for (auto CommentNode : SortedCommentNodes)
-            {
-                if (CommentNode->CommentDepth == Depth)
-                {
-                    auto NodesUnderComment = FFormatter::Instance().GetNodesUnderComment(Cast<UEdGraphNode_Comment>(CommentNode));
-                    NodesUnderComment = SelectedNodes.Intersect(NodesUnderComment);
-                    SelectedNodes = SelectedNodes.Difference(NodesUnderComment);
-                    FFormatterNode* CollapsedNode = CollapseCommentNode(CommentNode, NodesUnderComment);
-                    AddNode(CollapsedNode);
-                    SelectedNodes.Remove(CommentNode);
-                }
-                else
-                {
-                    break;
-                }
-            }
-        }
-        else
-        {
-            break;
-        }
-    }
-
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    if (FFormatter::Instance().IsBlueprint && !IsParameterGroup && Settings.bEnableBlueprintParameterGroup)
-    {
-        TArray<UEdGraphNode*> ExecNodes;
-        for (auto Node : SelectedNodes)
-        {
-            if (FFormatter::HasExecPin(Node))
-            {
-                ExecNodes.Add(Node);
-            }
-        }
-        for(auto Node: ExecNodes)
-        {
-            TSet<UEdGraphNode*> Group;
-            TSet<UEdGraphNode*> Excluded;
-            Group = FindParamGroupForExecNode(Node, SelectedNodes, Excluded);
-            if (Group.Num() >= 2)
-            {
-                FFormatterNode* CollapsedNode = CollapseGroup(Node, Group);
-                AddNode(CollapsedNode);
-                SelectedNodes = SelectedNodes.Difference(Group);
-            }
-        }
-    }
-    for (auto Node : SelectedNodes)
-    {
-        FFormatterNode* NodeData = new FFormatterNode(Node);
-        AddNode(NodeData);
-    }
-}
-
-void FFormatterGraph::BuildEdges(TSet<UEdGraphNode*> SelectedNodes)
-{
-    for (auto Node : Nodes)
-    {
-        auto Edges = GetEdgeForNode(Node, SelectedNodes);
-        for (auto Edge : Edges)
-        {
-            Node->Connect(Edge.From, Edge.To, Edge.Weight);
-        }
-    }
-}
-
-void FFormatterGraph::BuildNodesAndEdges(TSet<UEdGraphNode*> SelectedNodes)
-{
-    BuildNodes(SelectedNodes);
-    BuildEdges(SelectedNodes);
-    Nodes.Sort([](const FFormatterNode& A, const FFormatterNode& B)
-    {
-        return FFormatter::Instance().IsVerticalLayout ? A.GetPosition().X < B.GetPosition().X : A.GetPosition().Y < B.GetPosition().Y;
-    });
-}
-
-TArray<FFormatterEdge> FFormatterGraph::GetEdgeForNode(FFormatterNode* Node, TSet<UEdGraphNode*> SelectedNodes)
-{
-    TArray<FFormatterEdge> Result;
-    if (Node->SubGraph)
-    {
-        const TSet<UEdGraphNode*> InnerSelectedNodes = Node->SubGraph->GetOriginalNodes();
-        for (auto SelectedNode : InnerSelectedNodes)
-        {
-            for (auto Pin : SelectedNode->Pins)
-            {
-                for (auto LinkedToPin : Pin->LinkedTo)
-                {
-                    const auto LinkedToNode = LinkedToPin->GetOwningNodeUnchecked();
-                    if (InnerSelectedNodes.Contains(LinkedToNode) || !SelectedNodes.Contains(LinkedToNode))
-                    {
-                        continue;
-                    }
-                    FFormatterPin* From = OriginalPinsMap[Pin];
-                    FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-                    Result.Add(FFormatterEdge{From, To, GetEdgeWeight(Pin)});
-                }
-            }
-        }
-    }
-    else
-    {
-        for (auto Pin : Node->OriginalNode->Pins)
-        {
-            for (auto LinkedToPin : Pin->LinkedTo)
-            {
-                const auto LinkedToNode = LinkedToPin->GetOwningNodeUnchecked();
-                if (!SelectedNodes.Contains(LinkedToNode))
-                {
-                    continue;
-                }
-                FFormatterPin* From = OriginalPinsMap[Pin];
-                FFormatterPin* To = OriginalPinsMap[LinkedToPin];
-                Result.Add(FFormatterEdge{From, To, GetEdgeWeight(Pin)});
-            }
-        }
-    }
-    return Result;
-}
-
-TArray<TSet<UEdGraphNode*>> FFormatterGraph::FindIsolated()
-{
-    TArray<TSet<UEdGraphNode*>> Result;
-    TSet<FFormatterNode*> CheckedNodes;
-    TArray<FFormatterNode*> Stack;
-    for (auto Node : Nodes)
-    {
-        if (!CheckedNodes.Contains(Node))
-        {
-            CheckedNodes.Add(Node);
-            Stack.Push(Node);
-        }
-        TSet<UEdGraphNode*> IsolatedNodes;
-        while (Stack.Num() != 0)
-        {
-            FFormatterNode* Top = Stack.Pop();
-            IsolatedNodes.Add(Top->OriginalNode);
-            if (Top->SubGraph != nullptr)
-            {
-                IsolatedNodes.Append(Top->SubGraph->GetOriginalNodes());
-            }
-            TArray<FFormatterNode*> ConnectedNodes = Top->GetSuccessors();
-            TArray<FFormatterNode*> Predecessors = Top->GetPredecessors();
-            ConnectedNodes.Append(Predecessors);
-            for (auto ConnectedNode : ConnectedNodes)
-            {
-                if (!CheckedNodes.Contains(ConnectedNode))
-                {
-                    Stack.Push(ConnectedNode);
-                    CheckedNodes.Add(ConnectedNode);
-                }
-            }
-        }
-        if (IsolatedNodes.Num() != 0)
-        {
-            Result.Add(IsolatedNodes);
-        }
-    }
-    return Result;
-}
-
-TArray<UEdGraphNode_Comment*> FFormatterGraph::GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes)
-{
-    TArray<UEdGraphNode_Comment*> CommentNodes;
-    for (auto Node : SelectedNodes)
-    {
-        if (Node->IsA(UEdGraphNode_Comment::StaticClass()))
-        {
-            auto CommentNode = Cast<UEdGraphNode_Comment>(Node);
-            CommentNodes.Add(CommentNode);
-        }
-    }
-    CommentNodes.Sort([](const UEdGraphNode_Comment& A, const UEdGraphNode_Comment& B)
-        { return A.CommentDepth < B.CommentDepth; });
-    return CommentNodes;
-}
-
-FFormatterNode* FFormatterGraph::CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment)
-{
-    FFormatterNode* Node = new FFormatterNode(CommentNode);
-    if (NodesUnderComment.Num() > 0)
-    {
-        auto SubGraph = Build(NodesUnderComment);
-        float BorderHeight = FFormatter::Instance().GetCommentNodeTitleHeight(CommentNode);
-        const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-        SubGraph->SetBorder(Settings.CommentBorder, BorderHeight + Settings.CommentBorder, Settings.CommentBorder, Settings.CommentBorder);
-        Node->SetSubGraph(SubGraph);
-    }
-    return Node;
 }
 
 void FFormatterGraph::AddNode(FFormatterNode* InNode)
@@ -1102,30 +710,40 @@ void FFormatterGraph::AddNode(FFormatterNode* InNode)
     }
 }
 
-FFormatterNode* FFormatterGraph::CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group)
-{
-    FFormatterNode* Node = new FFormatterNode();
-    Node->OriginalNode = MainNode;
-    FConnectedGraph* SubGraph = new FConnectedGraph(Group, true);
-    Node->SetSubGraph(SubGraph);
-    SubGraph->SetBorder(0, 0, 0, 0);
-    return Node;
-}
-
 void FFormatterGraph::SetPosition(const FVector2D& Position)
 {
-    const FVector2D Offset = Position - TotalBound.GetTopLeft();
+    const FVector2D Offset = Position - TotalBound.Min;
     OffsetBy(Offset);
 }
 
 void FFormatterGraph::SetBorder(float Left, float Top, float Right, float Bottom)
 {
-    this->Border = FSlateRect(Left, Top, Right, Bottom);
+    this->Border = FBox2D(FVector2D(Left, Top), FVector2D(Right, Bottom));
 }
 
-FSlateRect FFormatterGraph::GetBorder() const
+FBox2D FFormatterGraph::GetBorder() const
 {
     return Border;
+}
+
+void FFormatterGraph::SetIsParameterGroup(bool InIsParameterGroup)
+{
+    IsParameterGroup = InIsParameterGroup;
+}
+
+bool FFormatterGraph::GetIsParameterGroup() const
+{
+    return IsParameterGroup;
+}
+
+bool FFormatterGraph::GetIsVerticalLayout() const
+{
+    return IsVerticalLayout;
+}
+
+void FFormatterGraph::SetIsVerticalLayout(bool InIsVerticalLayout)
+{
+    IsVerticalLayout = InIsVerticalLayout;
 }
 
 FFormatterGraph::FFormatterGraph(const FFormatterGraph& Other)
@@ -1150,14 +768,30 @@ FFormatterGraph::FFormatterGraph(const FFormatterGraph& Other)
             NodesMap[Node->Guid]->Connect(From, To, Edge->Weight);
         }
     }
+
+    TotalBound = Other.TotalBound;
+    Border = Other.Border;
+    IsParameterGroup = Other.IsParameterGroup;
+    IsVerticalLayout = Other.IsVerticalLayout;
 }
 
 FFormatterGraph::~FFormatterGraph()
 {
+    if (IsNodeDetached)
+    {
+        return;
+    }
+ 
     for (auto Node : Nodes)
     {
         delete Node;
     }
+}
+
+void FFormatterGraph::DetachAndDestroy()
+{
+    IsNodeDetached = true;
+    delete this;
 }
 
 FFormatterGraph* FFormatterGraph::Clone()
@@ -1178,13 +812,13 @@ FDisconnectedGraph::~FDisconnectedGraph()
     }
 }
 
-TMap<UEdGraphPin*, FVector2D> FDisconnectedGraph::GetPinsOffset()
+TMap<void*, FVector2D> FDisconnectedGraph::GetPinsOffset()
 {
-    TMap<UEdGraphPin*, FVector2D> Result;
+    TMap<void*, FVector2D> Result;
     for (auto Graph : ConnectedGraphs)
     {
         auto SubBound = Graph->GetTotalBound();
-        auto Offset = SubBound.GetTopLeft() - GetTotalBound().GetTopLeft();
+        auto Offset = SubBound.Min - GetTotalBound().Min;
         auto SubOffsets = Graph->GetPinsOffset();
         for (auto& SubOffsetPair : SubOffsets)
         {
@@ -1215,9 +849,9 @@ TArray<FFormatterPin*> FDisconnectedGraph::GetOutputPins() const
     return Result.Array();
 }
 
-TSet<UEdGraphNode*> FDisconnectedGraph::GetOriginalNodes() const
+TSet<void*> FDisconnectedGraph::GetOriginalNodes() const
 {
-    TSet<UEdGraphNode*> Result;
+    TSet<void*> Result;
     for (auto Graph : ConnectedGraphs)
     {
         Result.Append(Graph->GetOriginalNodes());
@@ -1227,29 +861,30 @@ TSet<UEdGraphNode*> FDisconnectedGraph::GetOriginalNodes() const
 
 void FDisconnectedGraph::Format()
 {
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-    FSlateRect PreBound;
+    FBox2D PreBound(ForceInit);
     for (auto Graph : ConnectedGraphs)
     {
         Graph->Format();
 
-        if (PreBound.IsValid())
+        if (PreBound.bIsValid)
         {
-            FVector2D StartCorner = FFormatter::Instance().IsVerticalLayout ? PreBound.GetTopRight() : PreBound.GetBottomLeft();
+            FVector2D TopRight = FVector2D(PreBound.Max.X, PreBound.Min.Y);
+            FVector2D BottomLeft = FVector2D(PreBound.Min.X, PreBound.Max.Y);
+            FVector2D StartCorner = IsVerticalLayout ? TopRight : BottomLeft;
             Graph->SetPosition(StartCorner);
         }
         auto Bound = Graph->GetTotalBound();
-        if (TotalBound.IsValid())
+        if (TotalBound.bIsValid)
         {
-            TotalBound = TotalBound.Expand(Bound);
+            TotalBound += Bound;
         }
         else
         {
             TotalBound = Bound;
         }
 
-        FVector2D Offset = FFormatter::Instance().IsVerticalLayout ? FVector2D(Settings.VerticalSpacing, 0) : FVector2D(0, Settings.VerticalSpacing);
-        PreBound = TotalBound.OffsetBy(Offset);
+        FVector2D Offset = IsVerticalLayout ? FVector2D(VerticalSpacing, 0) : FVector2D(0, VerticalSpacing);
+        PreBound = TotalBound.ShiftBy(Offset);
     }
 }
 
@@ -1261,9 +896,9 @@ void FDisconnectedGraph::OffsetBy(const FVector2D& InOffset)
     }
 }
 
-TMap<UEdGraphNode*, FSlateRect> FDisconnectedGraph::GetBoundMap()
+TMap<void*, FBox2D> FDisconnectedGraph::GetBoundMap()
 {
-    TMap<UEdGraphNode*, FSlateRect> Result;
+    TMap<void*, FBox2D> Result;
     for (auto Graph : ConnectedGraphs)
     {
         Result.Append(Graph->GetBoundMap());
@@ -1271,10 +906,9 @@ TMap<UEdGraphNode*, FSlateRect> FDisconnectedGraph::GetBoundMap()
     return Result;
 }
 
-FConnectedGraph::FConnectedGraph(const TSet<UEdGraphNode*>& SelectedNodes, bool InIsParameterGroup)
-    : FFormatterGraph(InIsParameterGroup)
+FConnectedGraph::FConnectedGraph(bool InIsVerticalLayout, bool InIsParameterGroup)
+    : FFormatterGraph(InIsVerticalLayout, InIsParameterGroup)
 {
-    BuildNodesAndEdges(SelectedNodes);
 }
 
 FConnectedGraph::FConnectedGraph(const FConnectedGraph& Other)
@@ -1307,33 +941,6 @@ FFormatterGraph* FConnectedGraph::Clone()
     return new FConnectedGraph(*this);
 }
 
-void FConnectedGraph::CalculatePinsIndex(const TArray<TArray<FFormatterNode*>>& Order)
-{
-    for (int32 i = 0; i < Order.Num(); i++)
-    {
-        auto& Layer = Order[i];
-        CalculatePinsIndexInLayer(Layer);
-    }
-}
-
-void FConnectedGraph::CalculatePinsIndexInLayer(const TArray<FFormatterNode*>& Layer)
-{
-    int32 InPinStartIndex = 0, OutPinStartIndex = 0;
-    for (int32 j = 0; j < Layer.Num(); j++)
-    {
-        for (auto InPin : Layer[j]->InPins)
-        {
-            InPin->IndexInLayer = InPinStartIndex + Layer[j]->GetInputPinIndex(InPin);
-        }
-        for (auto OutPin : Layer[j]->OutPins)
-        {
-            OutPin->IndexInLayer = OutPinStartIndex + Layer[j]->GetOutputPinIndex(OutPin);
-        }
-        OutPinStartIndex += Layer[j]->GetOutputPinCount();
-        InPinStartIndex += Layer[j]->GetInputPinCount();
-    }
-}
-
 TArray<FFormatterNode*> FConnectedGraph::GetLeavesWithPathDepth0() const
 {
     TArray<FFormatterNode*> Result;
@@ -1348,92 +955,14 @@ TArray<FFormatterNode*> FConnectedGraph::GetLeavesWithPathDepth0() const
     return Result;
 }
 
-static bool BehaviorTreeNodeComparer(const FFormatterNode& A, const FFormatterNode& B)
-{
-    return A.GetPosition().X < B.GetPosition().X;
-    UBehaviorTreeGraphNode* StateNodeA = static_cast<UBehaviorTreeGraphNode*>(A.OriginalNode);
-    UBTNode* BTNodeA = static_cast<UBTNode*>(StateNodeA->NodeInstance);
-    int32 IndexA = 0;
-    IndexA = (BTNodeA && BTNodeA->GetExecutionIndex() < 0xffff) ? BTNodeA->GetExecutionIndex() : -1;
-    UBehaviorTreeGraphNode* StateNodeB = static_cast<UBehaviorTreeGraphNode*>(B.OriginalNode);
-    UBTNode* BTNodeB = static_cast<UBTNode*>(StateNodeB->NodeInstance);
-    int32 IndexB = 0;
-    IndexB = (BTNodeB && BTNodeB->GetExecutionIndex() < 0xffff) ? BTNodeB->GetExecutionIndex() : -1;
-    return IndexA < IndexB;
-}
-
-TArray<TArray<FFormatterNode*>> GetLayeredListFromNewGraph(const FConnectedGraph* Graph)
-{
-    graph_layout::connected_graph_t g;
-    auto Nodes = Graph->GetAllNodes();
-    TMap<FFormatterPin*, graph_layout::pin_t*> PinsMap;
-    TMap<graph_layout::node_t*, FFormatterNode*> NodesMap;
-    for (auto Node : Nodes)
-    {
-        auto n = g.add_node();
-        for (auto Pin : Node->InPins)
-        {
-            auto pin = n->add_pin(graph_layout::pin_type_t::in);
-            PinsMap.Add(Pin, pin);
-        }
-        for (auto Pin : Node->OutPins)
-        {
-            auto pin = n->add_pin(graph_layout::pin_type_t::out);
-            PinsMap.Add(Pin, pin);
-        }
-        NodesMap.Add(n, Node);
-    }
-    for (auto Node : Nodes)
-    {
-        for (auto Edge : Node->InEdges)
-        {
-            g.add_edge(PinsMap[Edge->To], PinsMap[Edge->From]);
-        }
-        for (auto Edge : Node->OutEdges)
-        {
-            g.add_edge(PinsMap[Edge->From], PinsMap[Edge->To]);
-        }
-    }
-
-    g.rank();
-    TArray<TArray<FFormatterNode*>> LayeredList;
-    TMap<int, TArray<FFormatterNode*>> LayerMap;
-    for (auto n : g.nodes)
-    {
-        auto& Layer = LayerMap.FindOrAdd(n->rank, TArray<FFormatterNode*>());
-        Layer.Push(NodesMap[n]);
-    }
-    LayerMap.KeySort([](auto Rank1, auto Rank2) { return Rank1 < Rank2; });
-    for (auto [Key, Layer] : LayerMap)
-    {
-        LayeredList.Push(Layer);
-    }
-    return LayeredList;
-}
-
 void FConnectedGraph::DoLayering()
 {
-    // WIP: After extensive use, it has been discovered that there is a bug in tree_t::find_min_incident_edge,
-    // which leads to the inability to find the minimum incident edge and causes errors. Therefore, it has been disabled.
-#if 0
-    LayeredList = GetLayeredListFromNewGraph(this);
-
-    if (FFormatter::Instance().IsBehaviorTree)
-    {
-        for (auto& Layer : LayeredList)
-        {
-            Layer.Sort(BehaviorTreeNodeComparer);
-        }
-    }
-    return;
-#endif
-
     LayeredList.Empty();
     TSet<FFormatterNode*> Set;
     for (int32 i = AssignPathDepthForNodes(); i != 0; i--)
     {
         TSet<FFormatterNode*> Layer;
-        auto Successors = GetSuccessorsForNodes(Set);
+        auto Successors = FFormatterNode::GetSuccessorsForNodes(Set);
         auto NodesToProcess = GetNodesGreaterThan(i, Set);
         NodesToProcess.Append(Successors);
         for (auto Node : NodesToProcess)
@@ -1455,18 +984,17 @@ void FConnectedGraph::DoLayering()
         }
         Set.Append(Layer);
         TArray<FFormatterNode*> Array = Layer.Array();
-        const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
-        if (Settings->MaxLayerNodes)
+        if (MaxLayerNodes)
         {
             TArray<FFormatterNode*> SubLayer;
             for (int j = 0; j != Array.Num(); j++)
             {
                 SubLayer.Add(Array[j]);
-                if (SubLayer.Num() == Settings->MaxLayerNodes || j == Array.Num() - 1)
+                if (SubLayer.Num() == MaxLayerNodes || j == Array.Num() - 1)
                 {
-                    if (FFormatter::Instance().IsBehaviorTree)
+                    if (NodeComparer)
                     {
-                        SubLayer.Sort(BehaviorTreeNodeComparer);
+                        SubLayer.Sort(NodeComparer);
                     }
                     LayeredList.Add(SubLayer);
                     SubLayer.Reset();
@@ -1475,9 +1003,9 @@ void FConnectedGraph::DoLayering()
         }
         else
         {
-            if (FFormatter::Instance().IsBehaviorTree)
+            if (NodeComparer)
             {
-                Array.Sort(BehaviorTreeNodeComparer);
+                Array.Sort(NodeComparer);
             }
             LayeredList.Add(Array);
         }
@@ -1535,11 +1063,11 @@ void FConnectedGraph::SortInLayer(TArray<TArray<FFormatterNode*>>& Order, EEdGra
         }
         FreeLayer.StableSort([](const FFormatterNode& A, const FFormatterNode& B) -> bool
                              { return A.OrderValue < B.OrderValue; });
-        CalculatePinsIndexInLayer(FreeLayer);
+        FFormatterNode::CalculatePinsIndexInLayer(FreeLayer);
     }
 }
 
-TArray<FFormatterEdge*> FConnectedGraph::GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode)
+TArray<FFormatterEdge*> FFormatterNode::GetEdgeBetweenTwoLayer(const TArray<FFormatterNode*>& LowerLayer, const TArray<FFormatterNode*>& UpperLayer, const FFormatterNode* ExcludedNode)
 {
     TArray<FFormatterEdge*> Result;
     for (auto Node : LowerLayer)
@@ -1553,15 +1081,15 @@ TArray<FFormatterEdge*> FConnectedGraph::GetEdgeBetweenTwoLayer(const TArray<FFo
     return Result;
 }
 
-static int32 CalculateCrossing(const TArray<TArray<FFormatterNode*>>& Order)
+int32 FFormatterNode::CalculateCrossing(const TArray<TArray<FFormatterNode*>>& Order)
 {
-    FConnectedGraph::CalculatePinsIndex(Order);
+    CalculatePinsIndex(Order);
     int32 CrossingValue = 0;
     for (int i = 1; i < Order.Num(); i++)
     {
         const auto& UpperLayer = Order[i - 1];
         const auto& LowerLayer = Order[i];
-        TArray<FFormatterEdge*> NodeEdges = FConnectedGraph::GetEdgeBetweenTwoLayer(LowerLayer, UpperLayer);
+        TArray<FFormatterEdge*> NodeEdges = GetEdgeBetweenTwoLayer(LowerLayer, UpperLayer);
         while (NodeEdges.Num() != 0)
         {
             const auto Edge1 = NodeEdges.Pop();
@@ -1579,14 +1107,13 @@ static int32 CalculateCrossing(const TArray<TArray<FFormatterNode*>>& Order)
 
 void FConnectedGraph::DoOrderingSweep()
 {
-    const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
     auto Best = LayeredList;
     auto Order = LayeredList;
     int32 BestCrossing = INT_MAX;
-    for (int i = 0; i < Settings->MaxOrderingIterations; i++)
+    for (int i = 0; i < MaxOrderingIterations; i++)
     {
         SortInLayer(Order, i % 2 == 0 ? EGPD_Input : EGPD_Output);
-        const int32 NewCrossing = CalculateCrossing(Order);
+        const int32 NewCrossing = FFormatterNode::CalculateCrossing(Order);
         if (NewCrossing < BestCrossing)
         {
             Best = Order;
@@ -1598,45 +1125,43 @@ void FConnectedGraph::DoOrderingSweep()
 
 void FConnectedGraph::DoPositioning()
 {
-    const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
-
-    if (FFormatter::Instance().IsVerticalLayout)
+    if (IsVerticalLayout)
     {
         FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, false, IsParameterGroup);
         TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
         return;
     }
 
-    if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)
+    if (PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)
     {
         FEvenlyPlaceStrategy LeftToRightPositioningStrategy(LayeredList);
         TotalBound = LeftToRightPositioningStrategy.GetTotalBound();
     }
-    else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
+    else if (PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodMedian || PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)
     {
         FFastAndSimplePositioningStrategy FastAndSimplePositioningStrategy(LayeredList, true, IsParameterGroup);
         TotalBound = FastAndSimplePositioningStrategy.GetTotalBound();
     }
-    else if (Settings.PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::ELayerSweep)
+    else if (PositioningAlgorithm == EGraphFormatterPositioningAlgorithm::ELayerSweep)
     {
         FPriorityPositioningStrategy PriorityPositioningStrategy(LayeredList);
         TotalBound = PriorityPositioningStrategy.GetTotalBound();
     }
 }
 
-TMap<UEdGraphPin*, FVector2D> FConnectedGraph::GetPinsOffset()
+TMap<void*, FVector2D> FConnectedGraph::GetPinsOffset()
 {
-    TMap<UEdGraphPin*, FVector2D> Result;
+    TMap<void*, FVector2D> Result;
     for (auto Node : Nodes)
     {
         for (auto OutPin : Node->OutPins)
         {
-            FVector2D PinOffset = Node->Position + OutPin->NodeOffset - TotalBound.GetTopLeft();
+            FVector2D PinOffset = Node->Position + OutPin->NodeOffset - TotalBound.Min;
             Result.Add(OutPin->OriginalPin, PinOffset);
         }
         for (auto InPin : Node->InPins)
         {
-            FVector2D PinOffset = Node->Position + InPin->NodeOffset - TotalBound.GetTopLeft();
+            FVector2D PinOffset = Node->Position + InPin->NodeOffset - TotalBound.Min;
             Result.Add(InPin->OriginalPin, PinOffset);
         }
     }
@@ -1669,9 +1194,9 @@ TArray<FFormatterPin*> FConnectedGraph::GetOutputPins() const
     return Result.Array();
 }
 
-TSet<UEdGraphNode*> FConnectedGraph::GetOriginalNodes() const
+TSet<void*> FConnectedGraph::GetOriginalNodes() const
 {
-    TSet<UEdGraphNode*> Result;
+    TSet<void*> Result;
     for (auto Node : Nodes)
     {
         if (SubGraphs.Contains(Node->Guid))
@@ -1686,11 +1211,6 @@ TSet<UEdGraphNode*> FConnectedGraph::GetOriginalNodes() const
     return Result;
 }
 
-const TArray<FFormatterNode*>& FConnectedGraph::GetAllNodes() const
-{
-    return Nodes;
-}
-
 void FConnectedGraph::Format()
 {
     for (auto [Key, SubGraph] : SubGraphs)
@@ -1698,17 +1218,17 @@ void FConnectedGraph::Format()
         auto Node = NodesMap[Key];
         SubGraph->Format();
         auto SubGraphBorder = SubGraph->GetBorder();
-        Node->UpdatePinsOffset(FVector2D(SubGraphBorder.Left, SubGraphBorder.Top));
+        Node->UpdatePinsOffset(SubGraphBorder.Min);
         auto Bound = SubGraph->GetTotalBound();
-        Node->InitPosition(Bound.GetTopLeft() - FVector2D(SubGraphBorder.Left, SubGraphBorder.Top));
-        Node->Size = SubGraph->GetTotalBound().GetSize() + FVector2D(SubGraphBorder.Left + SubGraphBorder.Right, SubGraphBorder.Bottom + SubGraphBorder.Top);
+        Node->InitPosition(Bound.Min - SubGraphBorder.Min);
+        Node->Size = SubGraph->GetTotalBound().GetSize() + FVector2D(SubGraphBorder.Min.X + SubGraphBorder.Max.X, SubGraphBorder.Min.Y + SubGraphBorder.Max.Y);
     }
     if (Nodes.Num() > 0)
     {
         RemoveCycle();
         DoLayering();
         AddDummyNodes();
-        if (!FFormatter::Instance().IsBehaviorTree)
+        if (!NodeComparer)
         {
             DoOrderingSweep();
         }
@@ -1722,19 +1242,19 @@ void FConnectedGraph::OffsetBy(const FVector2D& InOffset)
     {
         Node->SetPosition(Node->GetPosition() + InOffset);
     }
-    TotalBound = TotalBound.OffsetBy(InOffset);
+    TotalBound = TotalBound.ShiftBy(InOffset);
 }
 
-TMap<UEdGraphNode*, FSlateRect> FConnectedGraph::GetBoundMap()
+TMap<void*, FBox2D> FConnectedGraph::GetBoundMap()
 {
-    TMap<UEdGraphNode*, FSlateRect> Result;
+    TMap<void*, FBox2D> Result;
     for (auto Node : Nodes)
     {
         if (Node->OriginalNode == nullptr)
         {
             continue;
         }
-        Result.Add(Node->OriginalNode, FSlateRect::FromPointAndExtent(Node->GetPosition(), Node->Size));
+        Result.Add(Node->OriginalNode, FBox2D(Node->GetPosition(), Node->GetPosition() + Node->Size));
         if (SubGraphs.Contains(Node->Guid))
         {
             Result.Append(SubGraphs[Node->Guid]->GetBoundMap());
@@ -1742,3 +1262,4 @@ TMap<UEdGraphNode*, FSlateRect> FConnectedGraph::GetBoundMap()
     }
     return Result;
 }
+

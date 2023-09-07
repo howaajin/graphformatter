@@ -12,10 +12,6 @@ namespace UnrealBuildTool.Rules
 		public GraphFormatter(ReadOnlyTargetRules Target) : base(Target)
 		{
 			PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-
-			var EngineDir = Path.GetFullPath(Target.RelativeEnginePath);
-
-			PublicIncludePaths.Add(Path.Combine(ModuleDirectory, "Public"));
             PublicIncludePaths.Add(ModuleDirectory);
 
             PrivateDependencyModuleNames.AddRange(

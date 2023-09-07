@@ -14,26 +14,19 @@ class FSoundCueEditor;
 class FBehaviorTreeEditor;
 class UEdGraphNode_Comment;
 
-namespace graph_layout
-{
-    struct graph_t;
-    struct node_t;
-}
-
 struct FFormatter
 {
+    static FFormatter& Instance();
+    static bool IsAssetSupported(const UObject* Object);
+    inline static bool IsAutoSizeComment = false;
+    
     bool IsVerticalLayout = false;
     bool IsBehaviorTree = false;
     bool IsBlueprint = false;
-    inline static bool IsAutoSizeComment = false;
 
     void SetCurrentEditor(SGraphEditor* Editor, UObject* Object);
     void SetZoomLevelTo11Scale() const;
     void RestoreZoomLevel() const;
-
-    static bool IsAssetSupported(const UObject* Object);
-    static bool IsExecPin(const UEdGraphPin* Pin);
-    static bool HasExecPin(const UEdGraphNode* Node);
 
     SGraphEditor* FindGraphEditorForTopLevelWindow() const;
     SGraphEditor* FindGraphEditorByCursor() const;
@@ -53,19 +46,6 @@ struct FFormatter
     void Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const;
     void Format();
     void PlaceBlock();
-
-    static FFormatter& Instance();
-
-    static TArray<UEdGraphNode_Comment*> GetSortedCommentNodes(TSet<UEdGraphNode*> SelectedNodes);
-    static TSet<UEdGraphNode*> FindParamGroupForExecNode(UEdGraphNode* Node, const TSet<UEdGraphNode*> Included, const TSet<UEdGraphNode*>& Excluded);
-    static graph_layout::graph_t* BuildGraph(TSet<UEdGraphNode*> Nodes, bool IsParameterGroup = false);
-    static void BuildNodes(graph_layout::graph_t* Graph, TSet<UEdGraphNode*> Nodes, bool IsParameterGroup = false);
-    static void BuildEdges(graph_layout::graph_t* Graph, TSet<UEdGraphNode*> SelectedNodes);
-    static void AddNode(graph_layout::graph_t* Graph, UEdGraphNode* Node, graph_layout::graph_t* SubGraph);
-    static graph_layout::graph_t* CollapseCommentNode(UEdGraphNode* CommentNode, TSet<UEdGraphNode*> NodesUnderComment);
-    static graph_layout::graph_t* CollapseGroup(UEdGraphNode* MainNode, TSet<UEdGraphNode*> Group);
-    static void BuildEdgeForNode(graph_layout::graph_t* Graph, graph_layout::node_t* Node, TSet<UEdGraphNode*> SelectedNodes);
-    static TMap<UEdGraphNode*, FSlateRect> GetBoundMap(graph_layout::graph_t* Graph);
 
 private:
     FFormatter();

@@ -6,16 +6,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "FormatterGraph.h"
 #include "FormatterSettings.generated.h"
-
-UENUM()
-enum class EGraphFormatterPositioningAlgorithm
-{
-    EEvenlyInLayer UMETA(DisplayName = "Place node evenly in layer"),
-    EFastAndSimpleMethodTop UMETA(DisplayName = "FAS Top"),
-    EFastAndSimpleMethodMedian UMETA(DisplayName = "FAS Median"),
-    ELayerSweep UMETA(DisplayName = "Layer sweep"),
-};
 
 UCLASS(config = Editor)
 class GRAPHFORMATTER_API UFormatterSettings : public UObject

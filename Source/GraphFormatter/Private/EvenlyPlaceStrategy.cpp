@@ -7,14 +7,14 @@
 #include "FormatterGraph.h"
 #include "FormatterSettings.h"
 
-FSlateRect FEvenlyPlaceStrategy::PlaceNodeInLayer(TArray<FFormatterNode*>& Layer, const FSlateRect& PreBound)
+FBox2D FEvenlyPlaceStrategy::PlaceNodeInLayer(TArray<FFormatterNode*>& Layer, const FBox2D& PreBound)
 {
-    FSlateRect Bound;
+    FBox2D Bound(ForceInit);
     const UFormatterSettings& Settings = *GetDefault<UFormatterSettings>();
     FVector2D Position;
-    if (PreBound.IsValid())
+    if (PreBound.bIsValid)
     {
-        Position = FVector2D(PreBound.Right + Settings.HorizontalSpacing, 0);
+        Position = FVector2D(PreBound.Max.X + Settings.HorizontalSpacing, 0);
     }
     else
     {
@@ -28,13 +28,13 @@ FSlateRect FEvenlyPlaceStrategy::PlaceNodeInLayer(TArray<FFormatterNode*>& Layer
             continue;
         }
         Node->SetPosition(Position);
-        if (Bound.IsValid())
+        if (Bound.bIsValid)
         {
-            Bound = Bound.Expand(FSlateRect::FromPointAndExtent(Position, Node->Size));
+            Bound += FBox2D(Position, Position + Node->Size);
         }
         else
         {
-            Bound = FSlateRect::FromPointAndExtent(Position, Node->Size);
+            Bound = FBox2D(Position, Position + Node->Size);
         }
         Position.Y += Node->Size.Y + Settings.VerticalSpacing;
     }
@@ -64,15 +64,15 @@ FEvenlyPlaceStrategy::FEvenlyPlaceStrategy(TArray<TArray<FFormatterNode*>>& InLa
     }
 
     float MaxHeight = 0;
-    FSlateRect PreBound;
-    TArray<FSlateRect> Bounds;
+    FBox2D PreBound(ForceInit);
+    TArray<FBox2D> Bounds;
     for (auto& Layer : InLayeredNodes)
     {
         PreBound = PlaceNodeInLayer(Layer, PreBound);
         Bounds.Add(PreBound);
-        if (TotalBound.IsValid())
+        if (TotalBound.bIsValid)
         {
-            TotalBound = TotalBound.Expand(PreBound);
+            TotalBound += PreBound;
         }
         else
         {
@@ -95,5 +95,5 @@ FEvenlyPlaceStrategy::FEvenlyPlaceStrategy(TArray<TArray<FFormatterNode*>>& InLa
             Node->SetPosition(Node->GetPosition() + Offset);
         }
     }
-    TotalBound = FSlateRect::FromPointAndExtent(StartPosition, TotalBound.GetSize());
+    TotalBound = FBox2D(StartPosition, StartPosition + TotalBound.GetSize());
 }

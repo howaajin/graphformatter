@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-#include "FormatterModule.h"
 #include "CoreMinimal.h"
 #include "EdGraph/EdGraph.h"
 #include "Editor.h"
@@ -23,21 +22,35 @@
 
 #define LOCTEXT_NAMESPACE "GraphFormatter"
 
-class FFormatterModule : public IGraphFormatterModule
+class FFormatterModule : public IModuleInterface
 {
     virtual void StartupModule() override;
     virtual void ShutdownModule() override;
-    virtual void FormatGraphAutomated(TObjectPtr<UObject> Object) override;
+    
+    virtual void FormatGraphAutomated(TObjectPtr<UObject> Object);
 
     void HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance);
-    void HandleEditorWidgetCreated(UObject* Object);
-    void HandleAssetEditorClosed(UObject* Object, EAssetEditorCloseReason Reason);
-    void FillToolbar(FToolBarBuilder& ToolbarBuilder);
     void ToggleStraightenConnections();
     bool IsStraightenConnectionsEnabled() const;
     SGraphEditor* FindEditorForObject(UObject* Object) const;
     FDelegateHandle GraphEditorDelegateHandle;
     TArray<TSharedPtr<EGraphFormatterPositioningAlgorithm>> AlgorithmOptions;
+    TSharedPtr<FExtender> ToolbarExtender;
+public:
+    void FillToolbar(FToolBarBuilder& ToolbarBuilder);
+    void ExtendToolBar(IAssetEditorInstance* Instance);
+    void MapCommands(UObject* Object, IAssetEditorInstance* Instance);
+    void OnGraphEditorDetected(UObject* Object, IAssetEditorInstance* Instance);
+};
+
+class FAssetEditorInstance
+{
+public:
+    static inline TMap<UObject*, FAssetEditorInstance*> Instances;
+    FFormatterModule* Module;
+    IAssetEditorInstance* Instance;
+    UObject* Object;
+    void HandleEditorWidgetCreated(UObject* Object);
 };
 
 IMPLEMENT_MODULE(FFormatterModule, GraphFormatter)
@@ -63,8 +76,6 @@ void FFormatterModule::StartupModule()
     if(GEditor)
     {
         GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().AddRaw(this, &FFormatterModule::HandleAssetEditorOpened);
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().AddRaw(this, &FFormatterModule::HandleEditorWidgetCreated);
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorRequestClose().AddRaw(this, &FFormatterModule::HandleAssetEditorClosed);
     }
     AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EEvenlyInLayer)));
     AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::EFastAndSimpleMethodTop)));
@@ -72,84 +83,111 @@ void FFormatterModule::StartupModule()
     AlgorithmOptions.Add(MakeShareable(new EGraphFormatterPositioningAlgorithm(EGraphFormatterPositioningAlgorithm::ELayerSweep)));
 }
 
-void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance)
+void FFormatterModule::ExtendToolBar(IAssetEditorInstance* Instance)
 {
-    UE_LOG(LogGraphFormatter, Log, TEXT("AssetEditorOpened for: %s"), *Object->GetClass()->GetName());
-    if (FFormatter::Instance().IsAssetSupported(Object))
+    const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+
+    if (!Settings->DisableToolbar)
     {
-        const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
         FAssetEditorToolkit* AssetEditorToolkit = StaticCast<FAssetEditorToolkit*>(Instance);
-        const FFormatterCommands& Commands = FFormatterCommands::Get();
         TSharedRef<FUICommandList> ToolkitCommands = AssetEditorToolkit->GetToolkitCommands();
-        if (ToolkitCommands->IsActionMapped(Commands.FormatGraph))
+        if (!ToolbarExtender.IsValid())
         {
-            return;
-        }
-        ToolkitCommands->MapAction(
-            Commands.FormatGraph,
-            FExecuteAction::CreateLambda([this, Object]
-            {
-                if (SGraphEditor* Editor = FindEditorForObject(Object))
-                {
-                    FFormatter::Instance().SetCurrentEditor(Editor, Object);
-                    FFormatter::Instance().Format();
-                }
-            }),
-            FCanExecuteAction()
-        );
-        ToolkitCommands->MapAction(
-            Commands.PlaceBlock,
-            FExecuteAction::CreateLambda([this, Object]
-            {
-                if (SGraphEditor* Editor = FindEditorForObject(Object))
-                {
-                    FFormatter::Instance().SetCurrentEditor(Editor, Object);
-                    FFormatter::Instance().PlaceBlock();
-                }
-            }),
-            FCanExecuteAction()
-        );
-        if (!Settings->DisableToolbar)
-        {
-            TSharedPtr<FExtender> Extender = FAssetEditorToolkit::GetSharedToolBarExtensibilityManager()->GetAllExtenders();
-            AssetEditorToolkit->AddToolbarExtender(Extender);
-            Extender->AddToolBarExtension(
+            ToolbarExtender = MakeShareable(new FExtender);
+            ToolbarExtender->AddToolBarExtension(
                 "Asset",
                 EExtensionHook::After,
                 ToolkitCommands,
                 FToolBarExtensionDelegate::CreateRaw(this, &FFormatterModule::FillToolbar)
             );
         }
-        if (!ToolkitCommands->IsActionMapped(Commands.StraightenConnections))
-        {
-            ToolkitCommands->MapAction(
-                Commands.StraightenConnections,
-                FExecuteAction::CreateRaw(this, &FFormatterModule::ToggleStraightenConnections),
-                FCanExecuteAction(),
-                FIsActionChecked::CreateRaw(this, &FFormatterModule::IsStraightenConnectionsEnabled)
-            );
-        }
+        AssetEditorToolkit->AddToolbarExtender(ToolbarExtender);
     }
 }
 
-void FFormatterModule::HandleEditorWidgetCreated(UObject* Object)
+void FFormatterModule::MapCommands(UObject* Object, IAssetEditorInstance* Instance)
 {
-    if (!FFormatter::Instance().IsAssetSupported(Object))
+    FAssetEditorToolkit* AssetEditorToolkit = StaticCast<FAssetEditorToolkit*>(Instance);
+
+    const FFormatterCommands& Commands = FFormatterCommands::Get();
+    TSharedRef<FUICommandList> ToolkitCommands = AssetEditorToolkit->GetToolkitCommands();
+    if (ToolkitCommands->IsActionMapped(Commands.FormatGraph))
     {
-        const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+        return;
+    }
+    ToolkitCommands->MapAction(
+        Commands.FormatGraph,
+        FExecuteAction::CreateLambda([this, Object, Instance]
+        {
+            if (SGraphEditor* Editor = FindEditorForObject(Object))
+            {
+                const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+                if (Settings->AutoDetectGraphEditor)
+                {
+                    OnGraphEditorDetected(Object, Instance);
+                }
+                FFormatter::Instance().SetCurrentEditor(Editor, Object);
+                FFormatter::Instance().Format();
+            }
+        }),
+        FCanExecuteAction()
+    );
+    ToolkitCommands->MapAction(
+        Commands.PlaceBlock,
+        FExecuteAction::CreateLambda([this, Object, Instance]
+        {
+            if (SGraphEditor* Editor = FindEditorForObject(Object))
+            {
+                const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+                if (Settings->AutoDetectGraphEditor)
+                {
+                    OnGraphEditorDetected(Object, Instance);
+                }
+                FFormatter::Instance().SetCurrentEditor(Editor, Object);
+                FFormatter::Instance().PlaceBlock();
+            }
+        }),
+        FCanExecuteAction()
+    );
+    ToolkitCommands->MapAction(
+        Commands.StraightenConnections,
+        FExecuteAction::CreateRaw(this, &FFormatterModule::ToggleStraightenConnections),
+        FCanExecuteAction(),
+        FIsActionChecked::CreateRaw(this, &FFormatterModule::IsStraightenConnectionsEnabled)
+    );
+}
+
+void FFormatterModule::HandleAssetEditorOpened(UObject* Object, IAssetEditorInstance* Instance)
+{
+    UE_LOG(LogGraphFormatter, Log, TEXT("AssetEditorOpened for: %s"), *Object->GetClass()->GetName());
+    if (!GEditor)
+    {
+        return;
+    }
+    const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+    if (FFormatter::Instance().IsAssetSupported(Object))
+    {
+        MapCommands(Object, Instance);
+        ExtendToolBar(Instance);
+    }
+    else
+    {
         if (Settings->AutoDetectGraphEditor)
         {
-            if (auto Editor = FFormatter::Instance().FindGraphEditorForTopLevelWindow())
+            MapCommands(Object, Instance);
+            if (!FAssetEditorInstance::Instances.Contains(Object))
             {
-                UFormatterSettings* MutableSettings = GetMutableDefault<UFormatterSettings>();
-                MutableSettings->SupportedAssetTypes.Add(Object->GetClass()->GetName(), true);
+                auto EditorInstance = new FAssetEditorInstance{this, Instance, Object};
+                GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().AddRaw(EditorInstance, &FAssetEditorInstance::HandleEditorWidgetCreated);
+                FAssetEditorInstance::Instances.Add(Object, EditorInstance);
+            }
+            else
+            {
+                auto EditorInstance = FAssetEditorInstance::Instances[Object];
+                EditorInstance->Instance = Instance;
             }
         }
     }
-}
-
-void FFormatterModule::HandleAssetEditorClosed(UObject* Object, EAssetEditorCloseReason Reason)
-{
 }
 
 static FText GetEnumAsString(EGraphFormatterPositioningAlgorithm EnumValue)
@@ -350,6 +388,39 @@ SGraphEditor* FFormatterModule::FindEditorForObject(UObject* Object) const
     return Editor;
 }
 
+void FFormatterModule::OnGraphEditorDetected(UObject* Object, IAssetEditorInstance* Instance)
+{
+    UFormatterSettings* MutableSettings = GetMutableDefault<UFormatterSettings>();
+    if(!MutableSettings->SupportedAssetTypes.Contains(Object->GetClass()->GetName()))
+    {
+        MutableSettings->SupportedAssetTypes.Add(Object->GetClass()->GetName(), true);
+        MutableSettings->PostEditChange();
+        MutableSettings->SaveConfig();
+        FAssetEditorToolkit* AssetEditorToolkit = StaticCast<FAssetEditorToolkit*>(Instance);
+        ExtendToolBar(Instance);
+        AssetEditorToolkit->RegenerateMenusAndToolbars();
+    }
+}
+
+void FAssetEditorInstance::HandleEditorWidgetCreated(UObject* InObject)
+{
+    const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
+    if (Settings->AutoDetectGraphEditor)
+    {
+        if (auto Editor = FFormatter::Instance().FindGraphEditorForTopLevelWindow())
+        {
+            Module->MapCommands(Object, Instance);
+            Module->OnGraphEditorDetected(Object, Instance);
+        }
+    }
+    if (GEditor)
+    {
+        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().RemoveAll(this);
+    }
+    Instances.Remove(Object);
+    delete this;
+}
+
 void FFormatterModule::ShutdownModule()
 {
     ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings");
@@ -359,8 +430,6 @@ void FFormatterModule::ShutdownModule()
     }
     if (GEditor)
     {
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorOpened().RemoveAll(this);
-        GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetEditorRequestClose().RemoveAll(this);
         GEditor->GetEditorSubsystem<UAssetEditorSubsystem>()->OnAssetOpenedInEditor().RemoveAll(this);
     }
     FFormatterStyle::Shutdown();
