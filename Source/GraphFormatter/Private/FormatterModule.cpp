@@ -387,7 +387,12 @@ void FFormatterModule::FormatGraphAutomated(const TObjectPtr<UObject> Object)
 		FFormatter::Instance().Format();
 	}
 
-	EditorInstance->CloseWindow();
+#if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >= 3 
+	EditorInstance->CloseWindow(EAssetEditorCloseReason::AssetEditorHostClosed);
+#else
+    EditorInstance->CloseWindow();
+#endif
+    
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -109,7 +109,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     # Add more versions to this list
-    predefined_versions = ["5.2", "5.1", "5.0"]
+    predefined_versions = ["5.3", "5.2", "5.1", "5.0"]
     if args.all:
         if os.path.exists(build_dir):
             shutil.rmtree(build_dir)
