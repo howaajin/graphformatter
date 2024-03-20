@@ -148,9 +148,9 @@ bool UEGraphAdapter::GetNodesConnectCenter(const TSet<UEdGraphNode*>& SelectedNo
             {
                 continue;
             }
-            if (Option == EFormatterPinDirection::In && Pin->Direction == EGPD_Input ||
-                Option == EFormatterPinDirection::Out && Pin->Direction == EGPD_Output ||
-                Option == EFormatterPinDirection::InOut)
+            if ((Option == EFormatterPinDirection::In && Pin->Direction == EGPD_Input) ||
+                (Option == EFormatterPinDirection::Out && Pin->Direction == EGPD_Output) ||
+                (Option == EFormatterPinDirection::InOut))
             {
                 for (auto LinkedPin : Pin->LinkedTo)
                 {
