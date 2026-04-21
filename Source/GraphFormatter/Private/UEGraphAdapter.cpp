@@ -1,4 +1,4 @@
-﻿/*---------------------------------------------------------------------------------------------
+/*---------------------------------------------------------------------------------------------
 *  Copyright (c) Howaajin. All rights reserved.
  *  Licensed under the MIT License. See License in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
@@ -16,7 +16,7 @@ FFormatterGraph* UEGraphAdapter::Build(TSet<UEdGraphNode*> Nodes, bool InIsVerti
     BuildNodesAndEdges(Graph, Graph->Nodes, Graph->OriginalPinsMap, Nodes);
     auto FoundIsolatedGraphs = FindIsolated(Graph->Nodes);
     delete Graph;
-    
+
     if (FoundIsolatedGraphs.Num() > 1)
     {
         auto DisconnectedGraph = new FDisconnectedGraph();
@@ -83,9 +83,9 @@ TSet<UEdGraphNode*> UEGraphAdapter::GetDirectConnected(const TSet<UEdGraphNode*>
     {
         for (auto Pin : Node->Pins)
         {
-            if (Option == EFormatterPinDirection::In && Pin->Direction == EGPD_Input ||
-                Option == EFormatterPinDirection::Out && Pin->Direction == EGPD_Output ||
-                Option == EFormatterPinDirection::InOut)
+            if ((Option == EFormatterPinDirection::In && Pin->Direction == EGPD_Input) ||
+                (Option == EFormatterPinDirection::Out && Pin->Direction == EGPD_Output) ||
+                (Option == EFormatterPinDirection::InOut))
             {
                 for (auto LinkedPin : Pin->LinkedTo)
                 {
