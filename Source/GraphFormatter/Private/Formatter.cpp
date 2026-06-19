@@ -33,76 +33,7 @@ static inline FCompatibleVector2 CompatibleVector2(FVector2D const& V)
 #ifdef GRAPH_FORMATTER_HACK
 #include "PrivateAccessor.h"
 
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SGraphPanel_ZoomLevels, SNodePanel, TSharedPtr<FZoomLevelsContainer>, ZoomLevels)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SGraphNodeResizable_UserSize, SGraphNodeResizable, FCompatibleDeprecateSlateVector2D, UserSize);
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SNodePanel_CurrentLOD, SNodePanel, EGraphRenderingLOD::Type, CurrentLOD);
-
-static TSharedPtr<FZoomLevelsContainer> TopZoomLevels;
-static TSharedPtr<FZoomLevelsContainer> TempZoomLevels;
-static EGraphRenderingLOD::Type OldLOD;
-
-class FTopZoomLevelContainer : public FZoomLevelsContainer
-{
-public:
-    virtual float GetZoomAmount(int32 InZoomLevel) const override { return 1.0f; }
-    virtual int32 GetNearestZoomLevel(float InZoomAmount) const override { return 0; }
-    virtual FText GetZoomText(int32 InZoomLevel) const override { return FText::FromString(TEXT("1:1")); }
-    virtual int32 GetNumZoomLevels() const override { return 1; }
-    virtual int32 GetDefaultZoomLevel() const override { return 0; }
-    virtual EGraphRenderingLOD::Type GetLOD(int32 InZoomLevel) const override { return EGraphRenderingLOD::DefaultDetail; }
-};
-
-// Tick all nodes manually
-static void TickWidgetRecursively(SWidget* Widget)
-{
-    Widget->GetChildren();
-    if (auto Children = Widget->GetChildren())
-    {
-        for (int32 ChildIndex = 0; ChildIndex < Children->Num(); ++ChildIndex)
-        {
-            auto ChildWidget = &Children->GetChildAt(ChildIndex).Get();
-            TickWidgetRecursively(ChildWidget);
-        }
-    }
-    Widget->Tick(Widget->GetCachedGeometry(), FSlateApplication::Get().GetCurrentTime(), 0);
-}
-
-// Set the GraphPanel ZoomLevel to 1:1 before formatting the graph.
-// From 1:1 scale to -5 scale, the result will be consistent but
-// can see slight variation due to the round-off error of floating point number
-void FFormatter::SetZoomLevelTo11Scale() const
-{
-    if (!TopZoomLevels.IsValid())
-    {
-        TopZoomLevels = MakeShared<FTopZoomLevelContainer>();
-    }
-    auto& ZoomLevels = CurrentPanel->*FPrivateAccessor<FAccess_SGraphPanel_ZoomLevels>::Member;
-    TempZoomLevels = MoveTemp(ZoomLevels);
-    ZoomLevels = MoveTemp(TopZoomLevels);
-    OldLOD = CurrentPanel->GetCurrentLOD();
-    CurrentPanel->*FPrivateAccessor<FAccess_SNodePanel_CurrentLOD>::Member = EGraphRenderingLOD::DefaultDetail;
-    auto Nodes = GetAllNodes();
-    for (auto Node : Nodes)
-    {
-        auto GraphNode = GetWidget(Node);
-        if (GraphNode != nullptr)
-        {
-            TickWidgetRecursively(GraphNode);
-        }
-    }
-    CurrentPanel->SlatePrepass();
-}
-
-void FFormatter::RestoreZoomLevel() const
-{
-    if (!TopZoomLevels.IsValid())
-    {
-        TopZoomLevels = MakeShared<FTopZoomLevelContainer>();
-    }
-    auto& ZoomLevels = CurrentPanel->*FPrivateAccessor<FAccess_SGraphPanel_ZoomLevels>::Member;
-    ZoomLevels = MoveTemp(TempZoomLevels);
-    CurrentPanel->*FPrivateAccessor<FAccess_SNodePanel_CurrentLOD>::Member = OldLOD;
-}
 
 #endif
 /** Hack end  */
@@ -297,9 +228,15 @@ bool FFormatter::PreCommand()
         return false;
     }
 
-#ifdef GRAPH_FORMATTER_HACK
-    SetZoomLevelTo11Scale();
-#endif
+    auto Nodes = GetAllNodes();
+    for (auto Node : Nodes)
+    {
+        auto GraphNode = GetWidget(Node);
+        if (GraphNode != nullptr)
+        {
+            GraphNode->SlatePrepass(FSlateApplicationBase::Get().GetApplicationScale());
+        }
+    }
 
     const UFormatterSettings* Settings = GetDefault<UFormatterSettings>();
     FFormatterGraph::HorizontalSpacing = Settings->HorizontalSpacing;
@@ -309,13 +246,6 @@ bool FFormatter::PreCommand()
     FFormatterGraph::MaxOrderingIterations = Settings->MaxOrderingIterations;
     FFormatterGraph::PositioningAlgorithm = Settings->PositioningAlgorithm;
     return true;
-}
-
-void FFormatter::PostCommand()
-{
-#ifdef GRAPH_FORMATTER_HACK
-    RestoreZoomLevel();
-#endif
 }
 
 void FFormatter::Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const
@@ -387,7 +317,7 @@ TSet<UEdGraphNode*> FFormatter::GetNodesUnderComment(const UEdGraphNode_Comment*
         return TSet<UEdGraphNode*>();
     }
     SGraphPanel* Panel = GetCurrentPanel();
-    FChildren* PanelChildren = Panel->GetAllChildren();
+    FChildren* PanelChildren = Panel->GetManagedChildren();
     int32 NumChildren = PanelChildren->Num();
     FVector2D CommentNodePosition = CommentNodeWidget->GetPosition();
     FSlateRect CommentRect = FSlateRect(CommentNodePosition, CommentNodePosition + CommentSize);
@@ -580,7 +510,6 @@ void FFormatter::Format()
 #endif
         }
     }
-    PostCommand();
 }
 
 void FFormatter::PlaceBlock()
@@ -635,7 +564,6 @@ void FFormatter::PlaceBlock()
         FVector2D Offset = LinkedCenterFrom - LinkedCenterTo;
         Translate(ConnectedNodesRight, Offset);
     }
-    PostCommand();
 }
 
 FFormatter& FFormatter::Instance()

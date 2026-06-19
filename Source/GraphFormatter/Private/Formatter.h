@@ -42,7 +42,6 @@ struct FFormatter
     TSet<UEdGraphNode*> GetNodesUnderComment(const UEdGraphNode_Comment* CommentNode) const;
 
     bool PreCommand();
-    void PostCommand();
     void Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const;
     void Format();
     void PlaceBlock();
