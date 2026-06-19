@@ -11,7 +11,7 @@ namespace UnrealBuildTool.Rules
 	{
 		public GraphFormatter(ReadOnlyTargetRules Target) : base(Target)
 		{
-			PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+			PCHUsage = PCHUsageMode.Default;
             PublicIncludePaths.Add(ModuleDirectory);
 
             PrivateDependencyModuleNames.AddRange(

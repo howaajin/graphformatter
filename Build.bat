@@ -7,11 +7,6 @@ set BUILD_DIR=%~dp0Build
 
 if not exist %BUILD_DIR% mkdir %BUILD_DIR% 
 
-@REM call :Build 5.0 %~1 %~2
-call :Build 5.1 %~1 %~2
-call :Build 5.2 %~1 %~2
-goto RET
-
 :Build
 set KEY_NAME="HKEY_LOCAL_MACHINE\SOFTWARE\EpicGames\Unreal Engine\%~1"
 set VALUE_NAME=InstalledDirectory

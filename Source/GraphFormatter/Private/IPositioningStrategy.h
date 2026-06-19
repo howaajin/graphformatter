@@ -6,7 +6,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Layout/SlateRect.h"
 
 class FFormatterNode;
 

@@ -16,9 +16,6 @@
 #include "SGraphNodeComment.h"
 #include "SGraphPanel.h"
 
-#include "graph_layout/graph_layout.h"
-using namespace graph_layout;
-
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >=  6
 typedef FVector2f FCompatibleVector2;
 typedef FDeprecateSlateVector2D FCompatibleDeprecateSlateVector2D;
@@ -36,12 +33,12 @@ static inline FCompatibleVector2 CompatibleVector2(FVector2D const& V)
 #ifdef GRAPH_FORMATTER_HACK
 #include "PrivateAccessor.h"
 
-DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SGraphPanel_ZoomLevels, SNodePanel, TUniquePtr<FZoomLevelsContainer>, ZoomLevels)
+DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SGraphPanel_ZoomLevels, SNodePanel, TSharedPtr<FZoomLevelsContainer>, ZoomLevels)
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SGraphNodeResizable_UserSize, SGraphNodeResizable, FCompatibleDeprecateSlateVector2D, UserSize);
 DECLARE_PRIVATE_MEMBER_ACCESSOR(FAccess_SNodePanel_CurrentLOD, SNodePanel, EGraphRenderingLOD::Type, CurrentLOD);
 
-static TUniquePtr<FZoomLevelsContainer> TopZoomLevels;
-static TUniquePtr<FZoomLevelsContainer> TempZoomLevels;
+static TSharedPtr<FZoomLevelsContainer> TopZoomLevels;
+static TSharedPtr<FZoomLevelsContainer> TempZoomLevels;
 static EGraphRenderingLOD::Type OldLOD;
 
 class FTopZoomLevelContainer : public FZoomLevelsContainer
@@ -77,7 +74,7 @@ void FFormatter::SetZoomLevelTo11Scale() const
 {
     if (!TopZoomLevels.IsValid())
     {
-        TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
+        TopZoomLevels = MakeShared<FTopZoomLevelContainer>();
     }
     auto& ZoomLevels = CurrentPanel->*FPrivateAccessor<FAccess_SGraphPanel_ZoomLevels>::Member;
     TempZoomLevels = MoveTemp(ZoomLevels);
@@ -100,7 +97,7 @@ void FFormatter::RestoreZoomLevel() const
 {
     if (!TopZoomLevels.IsValid())
     {
-        TopZoomLevels = MakeUnique<FTopZoomLevelContainer>();
+        TopZoomLevels = MakeShared<FTopZoomLevelContainer>();
     }
     auto& ZoomLevels = CurrentPanel->*FPrivateAccessor<FAccess_SGraphPanel_ZoomLevels>::Member;
     ZoomLevels = MoveTemp(TempZoomLevels);
