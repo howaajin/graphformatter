@@ -28,6 +28,70 @@ Please note that this plugin uses template specialization to access private memb
 [The useful Place Block command](https://github.com/howaajin/graphformatter/wiki/Usage-of-PlaceBlock-command)  
 You can find more details in the [Wiki](https://github.com/howaajin/graphformatter/wiki).
 
+## Formatting Blueprint graphs through MCP (UE 5.8)
+
+AI tools can create working Blueprint graphs but often leave overlapping nodes,
+long wires, and layouts that are difficult to read. The MCP tool lets an AI
+client finish a graph edit by running Graph Formatter's existing layout
+algorithm, using your spacing and positioning settings.
+
+This branch requires UE 5.8's built-in experimental **Toolset Registry** plugin,
+which Graph Formatter enables as a dependency. To expose its tool over MCP,
+also enable the built-in **Unreal MCP** plugin (`ModelContextProtocol`) in your
+project and restart the editor. Start its server using the engine's MCP settings
+or the `-ModelContextProtocolStartServer` command-line option, then connect your
+MCP client to the configured endpoint (normally `http://localhost:8000/mcp`).
+Graph Formatter does not start the server itself.
+
+In the default tool-search mode, use `list_toolsets` to find
+`GraphFormatter.GraphFormatterToolset`, then `describe_toolset` to read its
+schema. Invoke `call_tool` with:
+
+```json
+{
+  "toolset_name": "GraphFormatter.GraphFormatterToolset",
+  "tool_name": "FormatBlueprintGraph",
+  "arguments": {
+    "graph": {
+      "refPath": "/Game/Blueprints/BP_Example.BP_Example:EventGraph"
+    }
+  }
+}
+```
+
+Use the actual object path of the graph you want to arrange. The tool formats
+all nodes and comments in that one graph, including nodes outside the viewport.
+It measures an offscreen graph widget, so no asset editor needs to be open and
+the operation does not depend on the mouse position or take desktop focus.
+The toolbar and keyboard commands keep their existing behavior.
+
+Read `returnValue.bSuccess` and `returnValue.error` before continuing. The result
+also reports `nodeCount`, `movedNodeCount`, `resizedCommentCount`, and
+`bPackageDirty`. Formatting changes layout in an undo transaction; it does not
+compile, save, or check out the Blueprint. Review the layout and validate the
+Blueprint before saving it through your normal workflow.
+
+The tool accepts editable K2 graphs owned by initialized Blueprints. It refuses
+PIE or simulation, unsupported graphs, active Blueprint compilation, and invalid
+node ownership or GUIDs. Material, Niagara, behavior tree, and other non-K2
+graphs are outside this tool's scope. An idle editor with Slate initialized is
+required; this is not a standalone commandlet formatter.
+
+### Automation tests
+
+In an idle editor, run the `GraphFormatter.MCP` tests from Session Frontend, or
+run them in a separate editor process:
+
+```text
+UnrealEditor-Cmd.exe "YourProject.uproject" /Engine/Maps/Entry -unattended -nopause -nosplash -nullrhi -nosound -ExecCmds="Automation RunTests GraphFormatter.MCP" -TestExit="Automation Test Queue Empty" -ReportOutputPath="C:/Temp/GraphFormatterTests"
+```
+
+`Validation` checks toolset registration, rejected inputs, and PIE state.
+`LayoutAndUndo` checks linked
+node placement, comment resizing, preserved node identities and connections,
+and undo restoring the original positions and comment bounds. The tests create
+temporary Blueprint fixtures and do not save assets.
+
 ## Useful Tips
 
 1. **Comment-Based Grouping:** This plugin employs comment nodes to form groups. Grouping complex nodes based on comments can lead to more effective outcomes.

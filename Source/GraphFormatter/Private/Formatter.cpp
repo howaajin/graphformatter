@@ -15,6 +15,7 @@
 #include "Math/Ray.h"
 #include "SGraphNodeComment.h"
 #include "SGraphPanel.h"
+#include "Layout/ArrangedChildren.h"
 
 #if ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION >=  6
 typedef FVector2f FCompatibleVector2;
@@ -57,6 +58,16 @@ void FFormatter::SetCurrentEditor(SGraphEditor* Editor, UObject* Object)
     {
         IsVerticalLayout = true;
     }
+}
+
+void FFormatter::ClearCurrentEditor()
+{
+    CurrentEditor = nullptr;
+    CurrentPanel = nullptr;
+    CurrentGraph = nullptr;
+    IsVerticalLayout = false;
+    IsBehaviorTree = false;
+    IsBlueprint = false;
 }
 
 bool FFormatter::IsAssetSupported(const UObject* Object)
@@ -467,11 +478,34 @@ static TSet<UEdGraphNode*> DoSelectionStrategy(UEdGraph* Graph, TSet<UEdGraphNod
     return SelectedGraphNodes;
 }
 
-void FFormatter::Format()
+// Offscreen nodes have no paint pass to populate pin geometry. Arrange and tick
+// the node before its children so pins can measure offsets from their owner.
+static void TickArrangedWidget(SWidget& Widget, const FGeometry& Geometry)
+{
+    Widget.Tick(Geometry, FSlateApplication::Get().GetCurrentTime(), 0);
+    FArrangedChildren Children(EVisibility::Visible);
+    Widget.ArrangeChildren(Geometry, Children);
+    for (int32 Index = 0; Index < Children.Num(); ++Index)
+    {
+        TickArrangedWidget(Children[Index].Widget.Get(), Children[Index].Geometry);
+    }
+}
+
+void FFormatter::Format(bool bLayoutOffscreen)
 {
     if (!PreCommand())
     {
         return;
+    }
+    if (bLayoutOffscreen)
+    {
+        for (UEdGraphNode* Node : GetAllNodes())
+        {
+            SGraphNode* Widget = GetWidget(Node);
+            Widget->SlatePrepass(1.0f);
+            TickArrangedWidget(*Widget, FGeometry::MakeRoot(
+                Widget->GetDesiredSize(), FSlateLayoutTransform(1.0f, Widget->GetPosition())));
+        }
     }
     auto SelectedNodes = GetSelectedNodes(CurrentEditor);
     SelectedNodes = DoSelectionStrategy(CurrentGraph, SelectedNodes);
