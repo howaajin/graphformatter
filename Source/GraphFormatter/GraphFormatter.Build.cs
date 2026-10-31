@@ -29,6 +29,7 @@ namespace UnrealBuildTool.Rules
 					"EditorStyle",
 					"GraphEditor",
 					"BlueprintGraph",
+					"ToolsetRegistry",
 					"MaterialEditor",
 					"AIModule",
 					"AIGraph",

@@ -17,6 +17,8 @@
 #include "GraphEditorSettings.h"
 #include "ScopedTransaction.h"
 #include "FormatterLog.h"
+#include "GraphFormatterToolset.h"
+#include "ToolsetRegistry/UToolsetRegistry.h"
 #include "SGraphPanel.h"
 #include "Widgets/Input/SSpinBox.h"
 
@@ -57,6 +59,7 @@ IMPLEMENT_MODULE(FFormatterModule, GraphFormatter)
 
 void FFormatterModule::StartupModule()
 {
+    UToolsetRegistry::RegisterToolsetClass(UGraphFormatterToolset::StaticClass());
     FFormatterStyle::Initialize();
 
     ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings");
@@ -423,6 +426,7 @@ void FAssetEditorInstance::HandleEditorWidgetCreated(UObject* InObject)
 
 void FFormatterModule::ShutdownModule()
 {
+    UToolsetRegistry::UnregisterToolsetClass(UGraphFormatterToolset::StaticClass());
     ISettingsModule* SettingsModule = FModuleManager::GetModulePtr<ISettingsModule>("Settings");
     if (SettingsModule != nullptr)
     {

@@ -25,8 +25,7 @@ struct FFormatter
     bool IsBlueprint = false;
 
     void SetCurrentEditor(SGraphEditor* Editor, UObject* Object);
-    void SetZoomLevelTo11Scale() const;
-    void RestoreZoomLevel() const;
+    void ClearCurrentEditor();
 
     SGraphEditor* FindGraphEditorForTopLevelWindow() const;
     SGraphEditor* FindGraphEditorByCursor() const;
@@ -43,7 +42,7 @@ struct FFormatter
 
     bool PreCommand();
     void Translate(TSet<UEdGraphNode*> Nodes, FVector2D Offset) const;
-    void Format();
+    void Format(bool bLayoutOffscreen = false);
     void PlaceBlock();
 
 private:
